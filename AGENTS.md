@@ -7,3 +7,4 @@
   2. `npm run deploy`
 - Always run build before deploy.
 - If `DEPLOY_DIR` is missing or empty, do not run deploy.
+- provide instructions if any new npm commands are required
