@@ -48,10 +48,17 @@ export function createGestureStateMachine(config = {}) {
 
     const rawHands = Array.isArray(frame?.hands) ? frame.hands : [];
     const hands = rawHands.filter((hand) => hand.confidence >= thresholds.minHandsConfidence);
+    const mirrorX = typeof frame?.mirrorX === 'boolean' ? frame.mirrorX : Boolean(thresholds.mirrorX);
 
     const events = [];
     let activeGesture = 'idle';
     let confidence = 0;
+    const debug = {
+      mirrored: mirrorX,
+      deltaXRaw: 0,
+      deltaXAdjusted: 0,
+      interpretedSwipe: 'none',
+    };
 
     const twoHandsPose = classifyTwoHandsPose(hands);
     if (twoHandsPose) {
@@ -92,7 +99,7 @@ export function createGestureStateMachine(config = {}) {
       state.adjustPose = null;
       confidence = Math.min(...hands.map((hand) => hand.confidence));
       if (!events.length) activeGesture = twoHandsPose === 'open' ? 'two_open' : 'two_fist';
-      return { events, activeGesture, confidence, dtSec };
+      return { events, activeGesture, confidence, dtSec, debug };
     }
 
     state.twoHandsCandidate = null;
@@ -104,29 +111,37 @@ export function createGestureStateMachine(config = {}) {
     if (!hand) {
       state.adjustPose = null;
       state.adjustPoseSince = 0;
-      return { events, activeGesture, confidence, dtSec };
+      return { events, activeGesture, confidence, dtSec, debug };
     }
+
+    const rawVelocityX = hand.velocity?.x || 0;
+    const adjustedVelocityX = mirrorX ? -rawVelocityX : rawVelocityX;
+    debug.deltaXRaw = rawVelocityX;
+    debug.deltaXAdjusted = adjustedVelocityX;
 
     if (
       hand.pose === 'open_palm' &&
       ts >= state.swipeCooldownUntil &&
-      Math.abs(hand.velocity?.x || 0) >= thresholds.swipeVelocityX
+      Math.abs(adjustedVelocityX) >= thresholds.swipeVelocityX
     ) {
-      const direction = hand.velocity.x > 0 ? 'right' : 'left';
+      const direction = adjustedVelocityX > 0 ? 'right' : 'left';
       events.push({
-        type: direction === 'right' ? 'focus_next' : 'focus_prev',
-        velocityX: hand.velocity.x,
+        type: direction === 'right' ? 'swipe_right' : 'swipe_left',
+        velocityX: adjustedVelocityX,
+        rawVelocityX,
+        mirrored: mirrorX,
       });
       state.swipeCooldownUntil = ts + thresholds.swipeCooldownMs;
       activeGesture = direction === 'right' ? 'swipe_right' : 'swipe_left';
       confidence = hand.confidence;
+      debug.interpretedSwipe = direction;
     }
 
     const isAdjustPose = hand.pose === 'index_up' || hand.pose === 'index_down';
     if (!isAdjustPose) {
       state.adjustPose = null;
       state.adjustPoseSince = 0;
-      return { events, activeGesture, confidence, dtSec };
+      return { events, activeGesture, confidence, dtSec, debug };
     }
 
     if (state.adjustPose !== hand.pose) {
@@ -151,7 +166,7 @@ export function createGestureStateMachine(config = {}) {
       confidence = hand.confidence;
     }
 
-    return { events, activeGesture, confidence, dtSec };
+    return { events, activeGesture, confidence, dtSec, debug };
   }
 
   return {

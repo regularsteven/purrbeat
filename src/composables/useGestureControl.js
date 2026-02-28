@@ -1,5 +1,3 @@
-import { CORE_CONTROLS, getCoreControlByKey } from '../config/coreControls.js';
-import { createFocusCarousel } from '../gesture/focusCarousel.js';
 import { createGestureActions } from '../gesture/gestureActions.js';
 import { createGestureStateMachine } from '../gesture/gestureStateMachine.js';
 import { centroid, velocityFromPoints } from '../gesture/landmarkMath.js';
@@ -16,13 +14,14 @@ const toActionLabel = (action) => {
 
 const getNowIso = () => new Date().toISOString();
 
+function resolveBoolOption(option, fallback = false) {
+  if (typeof option === 'function') return Boolean(option());
+  if (option && typeof option === 'object' && 'value' in option) return Boolean(option.value);
+  if (typeof option === 'boolean') return option;
+  return fallback;
+}
+
 export function useGestureControl(options = {}) {
-  const controls = Array.isArray(options.controls) && options.controls.length ? options.controls : CORE_CONTROLS;
-  const controlKeys = controls.map((control) => control.key);
-
-  const carousel = createFocusCarousel(controlKeys, controlKeys[0] || null);
-  const focusedControlKey = Vue.ref(carousel.current);
-
   const cameraVideoRef = Vue.ref(null);
   const overlayCanvasRef = Vue.ref(null);
 
@@ -31,31 +30,43 @@ export function useGestureControl(options = {}) {
   const permissionState = Vue.ref(DEFAULT_PERMISSION_STATE);
   const cameraError = Vue.ref('');
 
+  const focusedControlKey = Vue.ref(options.initialFocusedControlKey || null);
+
   const activeGesture = Vue.ref('idle');
   const gestureConfidence = Vue.ref(0);
   const adjustVelocity = Vue.ref(0);
   const lastAction = Vue.ref('');
   const lastActionAt = Vue.ref('');
+  const gestureDebug = Vue.reactive({
+    deltaXRaw: 0,
+    deltaXAdjusted: 0,
+    mirrored: resolveBoolOption(options.mirrorX, true),
+    interpretedSwipe: 'none',
+  });
 
   let stream = null;
   let runtime = null;
   let rafId = null;
   let lastFrameTs = 0;
+  let lastProcessedTs = 0;
   const handCenters = new Map();
+
+  const processFps = Number(options.processFps) > 0 ? Number(options.processFps) : 45;
+  const minProcessIntervalMs = 1000 / processFps;
 
   const stateMachine = createGestureStateMachine();
   const actions = createGestureActions({
     getFocusedControl: () => focusedControlKey.value,
-    getControlMeta: (key) => getCoreControlByKey(key),
+    getControlMeta: (key) => options.getControlMeta?.(key),
     isControlAdjustable: (key) => {
       if (!options.isControlAdjustable) return true;
       return Boolean(options.isControlAdjustable(key));
     },
-    onFocusNext: () => {
-      focusedControlKey.value = carousel.next();
+    onSwipeLeft: () => {
+      options.onSwipeLeft?.();
     },
-    onFocusPrev: () => {
-      focusedControlKey.value = carousel.prev();
+    onSwipeRight: () => {
+      options.onSwipeRight?.();
     },
     onAdjust: (key, delta) => {
       options.onAdjustControl?.(key, delta);
@@ -68,15 +79,30 @@ export function useGestureControl(options = {}) {
     },
   });
 
+  const shouldDrawDebugOverlay = () => resolveBoolOption(options.debugEnabled, false);
+  const shouldDrawLandmarksOverlay = () => resolveBoolOption(options.overlayEnabled, true) || shouldDrawDebugOverlay();
+  const isPreviewMirrored = () => resolveBoolOption(options.mirrorX, true);
+
   function markAction(action) {
     lastAction.value = toActionLabel(action);
     lastActionAt.value = getNowIso();
+  }
+
+  function clearOverlay() {
+    const canvas = overlayCanvasRef.value;
+    if (!canvas) return;
+    const g = canvas.getContext('2d');
+    g?.clearRect(0, 0, canvas.width, canvas.height);
   }
 
   function resetGestureState() {
     activeGesture.value = 'idle';
     gestureConfidence.value = 0;
     adjustVelocity.value = 0;
+    gestureDebug.deltaXRaw = 0;
+    gestureDebug.deltaXAdjusted = 0;
+    gestureDebug.interpretedSwipe = 'none';
+    gestureDebug.mirrored = isPreviewMirrored();
     stateMachine.reset();
   }
 
@@ -84,14 +110,10 @@ export function useGestureControl(options = {}) {
     if (rafId) cancelAnimationFrame(rafId);
     rafId = null;
     lastFrameTs = 0;
+    lastProcessedTs = 0;
     handCenters.clear();
     resetGestureState();
-
-    const canvas = overlayCanvasRef.value;
-    if (canvas) {
-      const g = canvas.getContext('2d');
-      g?.clearRect(0, 0, canvas.width, canvas.height);
-    }
+    clearOverlay();
   }
 
   function normalizeHands(result, timestampMs) {
@@ -135,31 +157,63 @@ export function useGestureControl(options = {}) {
     return frameHands;
   }
 
+  function updateAdjustVelocity(target) {
+    const next = Number.isFinite(target) ? target : 0;
+    adjustVelocity.value = adjustVelocity.value + (next - adjustVelocity.value) * 0.28;
+    if (Math.abs(adjustVelocity.value) < 0.0001) adjustVelocity.value = 0;
+  }
+
   function frameLoop(timestampMs) {
     if (!cameraEnabled.value || !runtime || !cameraVideoRef.value) return;
+
+    if (lastProcessedTs && timestampMs - lastProcessedTs < minProcessIntervalMs) {
+      rafId = requestAnimationFrame(frameLoop);
+      return;
+    }
+
+    lastProcessedTs = timestampMs;
 
     try {
       const result = runtime.detectForVideo(cameraVideoRef.value, timestampMs);
       const hands = normalizeHands(result, timestampMs);
-      const outcome = stateMachine.update({ timestampMs, hands });
+      const outcome = stateMachine.update({
+        timestampMs,
+        hands,
+        mirrorX: isPreviewMirrored(),
+      });
       const applied = actions.apply(outcome.events);
 
       activeGesture.value = outcome.activeGesture;
       gestureConfidence.value = outcome.confidence;
-      adjustVelocity.value = applied.latestAdjustVelocity;
+      updateAdjustVelocity(applied.latestAdjustVelocity);
 
-      if (applied.latestAction) markAction(applied.latestAction);
+      gestureDebug.deltaXRaw = outcome.debug?.deltaXRaw || 0;
+      gestureDebug.deltaXAdjusted = outcome.debug?.deltaXAdjusted || 0;
+      gestureDebug.interpretedSwipe = outcome.debug?.interpretedSwipe || 'none';
+      gestureDebug.mirrored = Boolean(outcome.debug?.mirrored);
 
-      drawGestureOverlay({
-        canvas: overlayCanvasRef.value,
-        video: cameraVideoRef.value,
-        hands,
-        hud: {
-          activeGesture: activeGesture.value,
-          focusedControlKey: focusedControlKey.value,
-          confidence: gestureConfidence.value,
-        },
-      });
+      if (applied.latestAction) {
+        markAction(applied.latestAction);
+      } else {
+        updateAdjustVelocity(0);
+      }
+
+      if (shouldDrawLandmarksOverlay()) {
+        drawGestureOverlay({
+          canvas: overlayCanvasRef.value,
+          video: cameraVideoRef.value,
+          hands,
+          hud: shouldDrawDebugOverlay()
+            ? {
+                activeGesture: activeGesture.value,
+                focusedControlKey: focusedControlKey.value,
+                confidence: gestureConfidence.value,
+              }
+            : null,
+        });
+      } else {
+        clearOverlay();
+      }
     } catch (error) {
       cameraError.value = `Gesture loop failed: ${error.message}`;
       disableCamera();
@@ -262,7 +316,7 @@ export function useGestureControl(options = {}) {
   }
 
   function setFocusedControl(key) {
-    focusedControlKey.value = carousel.setByKey(key);
+    focusedControlKey.value = key || null;
   }
 
   function getAssetInfo() {
@@ -286,6 +340,7 @@ export function useGestureControl(options = {}) {
     adjustVelocity,
     lastAction,
     lastActionAt,
+    gestureDebug,
     enableCamera,
     disableCamera,
     startGestureLoop,

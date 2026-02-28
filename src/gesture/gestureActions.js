@@ -4,6 +4,8 @@ export function createGestureActions({
   getFocusedControl,
   getControlMeta,
   isControlAdjustable,
+  onSwipeRight,
+  onSwipeLeft,
   onFocusNext,
   onFocusPrev,
   onAdjust,
@@ -17,15 +19,17 @@ export function createGestureActions({
       let latestAction = null;
 
       for (const event of events) {
-        if (event.type === 'focus_next') {
+        if (event.type === 'swipe_right' || event.type === 'focus_next') {
+          onSwipeRight?.();
           onFocusNext?.();
-          latestAction = 'focus_next';
+          latestAction = 'swipe_right';
           continue;
         }
 
-        if (event.type === 'focus_prev') {
+        if (event.type === 'swipe_left' || event.type === 'focus_prev') {
+          onSwipeLeft?.();
           onFocusPrev?.();
-          latestAction = 'focus_prev';
+          latestAction = 'swipe_left';
           continue;
         }
 

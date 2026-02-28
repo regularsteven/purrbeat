@@ -1,40 +1,219 @@
-import { CORE_CONTROLS, formatCoreControlValue, getCoreControlByKey } from './config/coreControls.js';
+import { isCoreControlKey } from './config/coreControls.js';
+import {
+  CONTROL_BANKS,
+  CONTROL_CATALOG,
+  clampControlValue,
+  formatControlValue,
+  getControlByKey,
+  getEnumStepValue,
+} from './config/controlBanks.js';
+import { CameraOverlayView } from './components/CameraOverlayView.js';
 import { useGestureControl } from './composables/useGestureControl.js';
 import { usePurrEngine } from './composables/usePurrEngine.js';
 
+const DISCRETE_GESTURE_COOLDOWN_MS = 240;
+
+const clampIndex = (index, size) => {
+  if (!size) return 0;
+  return ((index % size) + size) % size;
+};
+
+const toNumericDeltaSign = (delta) => (delta >= 0 ? 1 : -1);
+
 export const App = {
+  components: {
+    CameraOverlayView,
+  },
   setup() {
     const engine = usePurrEngine();
-    const configText = Vue.ref(engine.configJson.value);
 
-    Vue.watch(engine.configJson, (value) => {
-      configText.value = value;
+    const controlState = Vue.reactive(
+      CONTROL_CATALOG.map((control) => ({
+        ...control,
+        value: null,
+      })),
+    );
+    const controlByKey = new Map(controlState.map((control) => [control.key, control]));
+
+    const overlayStore = Vue.reactive({
+      activeBankIndex: 0,
+      activeControlIndex: 0,
+      controls: controlState,
+      gestureState: {
+        lastDirection: 'idle',
+        velocity: 0,
+        confidence: 0,
+        deltaXRaw: 0,
+        deltaXAdjusted: 0,
+        mirrored: true,
+        interpretedSwipe: 'none',
+      },
     });
 
-    const pasteApply = () => {
-      try {
-        engine.applyConfig(configText.value);
-      } catch {
-        alert('Invalid JSON');
+    const debugMode = Vue.ref(false);
+    const showLandmarks = Vue.ref(true);
+    const mirroredPreview = Vue.ref(true);
+    const transportError = Vue.ref('');
+
+    const perBankControlIndex = Vue.reactive(CONTROL_BANKS.map(() => 0));
+    const discreteGestureAt = new Map();
+    let manualTransportLockUntil = 0;
+
+    const activeBank = Vue.computed(() => CONTROL_BANKS[overlayStore.activeBankIndex] || CONTROL_BANKS[0]);
+    const activeBankKey = Vue.computed(() => activeBank.value?.key || 'transport');
+
+    const activeControls = Vue.computed(() => {
+      const keys = activeBank.value?.controls || [];
+      return keys.map((key) => controlByKey.get(key)).filter(Boolean);
+    });
+
+    const activeControl = Vue.computed(() => {
+      const controls = activeControls.value;
+      if (!controls.length) return null;
+      const safeIndex = Math.min(overlayStore.activeControlIndex, controls.length - 1);
+      return controls[safeIndex] || controls[0];
+    });
+
+    const activeControlLabel = Vue.computed(() => activeControl.value?.label || 'n/a');
+    const activeControlDisplay = Vue.computed(() => {
+      const control = activeControl.value;
+      if (!control) return 'n/a';
+      return formatControlValue(control, control.value);
+    });
+
+    let gesture = null;
+
+    function syncFocusToActiveControl() {
+      const control = activeControl.value;
+      if (!control || !gesture) return;
+      gesture.setFocusedControl(control.key);
+    }
+
+    function setActiveControlIndex(index) {
+      const controls = activeControls.value;
+      if (!controls.length) return;
+      overlayStore.activeControlIndex = clampIndex(index, controls.length);
+      perBankControlIndex[overlayStore.activeBankIndex] = overlayStore.activeControlIndex;
+      syncFocusToActiveControl();
+    }
+
+    function setActiveControlByKey(key) {
+      if (!key) return;
+
+      const currentIndex = activeControls.value.findIndex((control) => control.key === key);
+      if (currentIndex !== -1) {
+        setActiveControlIndex(currentIndex);
+        return;
       }
-    };
 
-    const gesture = useGestureControl({
-      controls: CORE_CONTROLS,
-      onAdjustControl: (key, delta) => engine.nudgeCoreParam(key, delta),
-      onTransportStart: () => {
-        engine.start();
-      },
-      onTransportStop: () => {
-        engine.stop();
-      },
-      isControlAdjustable: (key) => !(key === 'pulseHz' && engine.params.syncToBpm),
-    });
+      const bankIndex = CONTROL_BANKS.findIndex((bank) => bank.controls.includes(key));
+      if (bankIndex === -1) return;
+      setActiveBank(bankIndex);
 
-    const coreControls = CORE_CONTROLS;
+      const nextIndex = activeControls.value.findIndex((control) => control.key === key);
+      if (nextIndex !== -1) setActiveControlIndex(nextIndex);
+    }
 
-    const focusedControlMeta = Vue.computed(() => getCoreControlByKey(gesture.focusedControlKey.value));
-    const focusedControlLabel = Vue.computed(() => focusedControlMeta.value?.label || 'n/a');
+    function setActiveBank(index) {
+      const bankCount = CONTROL_BANKS.length;
+      const normalized = clampIndex(index, bankCount);
+
+      perBankControlIndex[overlayStore.activeBankIndex] = overlayStore.activeControlIndex;
+      overlayStore.activeBankIndex = normalized;
+
+      const nextBankSize = (CONTROL_BANKS[normalized]?.controls || []).length;
+      const nextControlIndex = Math.min(perBankControlIndex[normalized] || 0, Math.max(0, nextBankSize - 1));
+      overlayStore.activeControlIndex = nextControlIndex;
+
+      syncFocusToActiveControl();
+    }
+
+    const isControlDisabled = (key) => key === 'pulseHz' && engine.params.syncToBpm;
+
+    function setControlValue(key, rawValue) {
+      const control = controlByKey.get(key);
+      if (!control) return;
+
+      if (control.type === 'number') {
+        if (isControlDisabled(key)) return;
+        const clamped = clampControlValue(control, rawValue);
+        if (isCoreControlKey(key)) {
+          engine.setCoreParam(key, clamped);
+          return;
+        }
+
+        engine.params[key] = clamped;
+        engine.applyParams();
+        return;
+      }
+
+      if (control.type === 'toggle') {
+        engine.params[key] = Boolean(rawValue);
+        engine.applyParams();
+        return;
+      }
+
+      if (control.type === 'enum') {
+        engine.params[key] = rawValue;
+        engine.applyParams();
+      }
+    }
+
+    function shouldApplyDiscreteGesture(key, nowMs) {
+      const lastAt = discreteGestureAt.get(key) || 0;
+      if (nowMs - lastAt < DISCRETE_GESTURE_COOLDOWN_MS) return false;
+      discreteGestureAt.set(key, nowMs);
+      return true;
+    }
+
+    function nudgeControlValue(key, delta) {
+      const control = controlByKey.get(key);
+      if (!control) return;
+
+      if (control.type === 'number') {
+        const currentValue = Number(control.value);
+        setControlValue(key, currentValue + Number(delta));
+        return;
+      }
+
+      const now = performance.now();
+      if (!shouldApplyDiscreteGesture(key, now)) return;
+
+      const sign = toNumericDeltaSign(Number(delta));
+      if (control.type === 'toggle') {
+        setControlValue(key, sign > 0);
+        return;
+      }
+
+      if (control.type === 'enum') {
+        const nextValue = getEnumStepValue(control, control.value, sign);
+        setControlValue(key, nextValue);
+      }
+    }
+
+    function formatDisplay(control) {
+      return formatControlValue(control, control.value);
+    }
+
+    function isFocused(key) {
+      return activeControl.value?.key === key;
+    }
+
+    function onNumberInput(key, value) {
+      setActiveControlByKey(key);
+      setControlValue(key, value);
+    }
+
+    function onToggleControl(key) {
+      setActiveControlByKey(key);
+      const control = controlByKey.get(key);
+      setControlValue(key, !Boolean(control?.value));
+    }
+
+    function onEnumSelect(key, value) {
+      setActiveControlByKey(key);
+      setControlValue(key, value);
+    }
 
     const cameraStatusClass = Vue.computed(() => {
       if (gesture.permissionState.value === 'granted' && gesture.cameraEnabled.value) {
@@ -49,6 +228,57 @@ export const App = {
       return 'border-white/20 bg-white/5 text-slate-200';
     });
 
+    const isTransportGestureAllowed = () => performance.now() >= manualTransportLockUntil;
+
+    async function handleStart() {
+      manualTransportLockUntil = performance.now() + 900;
+      transportError.value = '';
+      try {
+        await engine.start();
+      } catch (error) {
+        transportError.value = `Audio start failed: ${error?.message || String(error)}`;
+        console.error('[transport] start failed', error);
+      }
+    }
+
+    function handleStop() {
+      manualTransportLockUntil = performance.now() + 450;
+      transportError.value = '';
+      try {
+        engine.stop();
+      } catch (error) {
+        transportError.value = `Audio stop failed: ${error?.message || String(error)}`;
+        console.error('[transport] stop failed', error);
+      }
+    }
+
+    gesture = useGestureControl({
+      initialFocusedControlKey: activeControl.value?.key || CONTROL_BANKS[0]?.controls?.[0] || null,
+      getControlMeta: (key) => controlByKey.get(key) || getControlByKey(key),
+      isControlAdjustable: (key) => {
+        const control = controlByKey.get(key);
+        if (!control) return false;
+        if (!control.gestureAdjustable) return false;
+        if (key === 'pulseHz' && engine.params.syncToBpm) return false;
+        return true;
+      },
+      onSwipeLeft: () => setActiveBank(overlayStore.activeBankIndex - 1),
+      onSwipeRight: () => setActiveBank(overlayStore.activeBankIndex + 1),
+      onAdjustControl: (key, delta) => nudgeControlValue(key, delta),
+      onTransportStart: () => {
+        if (!isTransportGestureAllowed()) return;
+        handleStart();
+      },
+      onTransportStop: () => {
+        if (!isTransportGestureAllowed()) return;
+        handleStop();
+      },
+      mirrorX: () => mirroredPreview.value,
+      debugEnabled: () => debugMode.value,
+      overlayEnabled: () => showLandmarks.value,
+      processFps: 45,
+    });
+
     const toggleCameraControl = async () => {
       if (gesture.cameraEnabled.value) {
         gesture.disableCamera();
@@ -57,166 +287,132 @@ export const App = {
       await gesture.enableCamera();
     };
 
-    const onCoreInput = (key, value) => {
-      gesture.setFocusedControl(key);
-      engine.setCoreParam(key, Number(value));
+    const toggleDebugMode = () => {
+      debugMode.value = !debugMode.value;
     };
 
-    const isControlFocused = (key) => gesture.focusedControlKey.value === key;
-    const isControlDisabled = (key) => key === 'pulseHz' && engine.params.syncToBpm;
-    const formatControlValue = (control) => formatCoreControlValue(control.key, engine.params[control.key]);
+    const toggleLandmarks = () => {
+      showLandmarks.value = !showLandmarks.value;
+    };
 
-    const mediapipeAssets = gesture.getAssetInfo();
+    const toggleMirrorMode = () => {
+      mirroredPreview.value = !mirroredPreview.value;
+    };
+
+    const setCameraVideoEl = (el) => {
+      gesture.cameraVideoRef.value = el;
+    };
+
+    const setOverlayCanvasEl = (el) => {
+      gesture.overlayCanvasRef.value = el;
+    };
+
+    Vue.watchEffect(() => {
+      for (const control of controlState) {
+        control.value = engine.params[control.key];
+      }
+    });
+
+    Vue.watchEffect(() => {
+      overlayStore.gestureState.lastDirection = gesture.activeGesture.value;
+      overlayStore.gestureState.velocity = gesture.adjustVelocity.value;
+      overlayStore.gestureState.confidence = gesture.gestureConfidence.value;
+      overlayStore.gestureState.deltaXRaw = gesture.gestureDebug.deltaXRaw;
+      overlayStore.gestureState.deltaXAdjusted = gesture.gestureDebug.deltaXAdjusted;
+      overlayStore.gestureState.mirrored = gesture.gestureDebug.mirrored;
+      overlayStore.gestureState.interpretedSwipe = gesture.gestureDebug.interpretedSwipe;
+    });
+
+    Vue.watch(
+      () => [overlayStore.activeBankIndex, overlayStore.activeControlIndex],
+      () => {
+        syncFocusToActiveControl();
+      },
+      { immediate: true },
+    );
 
     return {
       ...engine,
       ...gesture,
-      configText,
-      pasteApply,
-      coreControls,
-      focusedControlLabel,
+      debugMode,
+      showLandmarks,
+      mirroredPreview,
+      banks: CONTROL_BANKS,
+      overlayStore,
+      activeBankLabel: Vue.computed(() => activeBank.value?.label || 'n/a'),
+      activeBankKey,
+      activeControls,
+      activeControlLabel,
+      activeControlDisplay,
+      transportError,
       cameraStatusClass,
       toggleCameraControl,
-      onCoreInput,
-      isControlFocused,
+      toggleDebugMode,
+      toggleLandmarks,
+      toggleMirrorMode,
+      handleStart,
+      handleStop,
+      setCameraVideoEl,
+      setOverlayCanvasEl,
+      setActiveBank,
+      setActiveControlByKey,
+      onNumberInput,
+      onToggleControl,
+      onEnumSelect,
+      isFocused,
       isControlDisabled,
-      formatControlValue,
-      mediapipeAssets,
+      formatDisplay,
     };
   },
   template: `
-  <main class="min-h-screen bg-slate-950 p-6 text-slate-100">
-    <div class="mx-auto grid max-w-6xl gap-4">
-      <section class="rounded-2xl border border-white/10 bg-slate-900/90 p-4 shadow-2xl">
-        <div class="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 class="text-xl font-bold">Cat Purr Simulator</h1>
-            <p class="text-sm text-slate-400">Binaural purr prototype with kick sequencing, JSON preset tools, and camera gestures.</p>
-          </div>
-          <div class="rounded-full border border-white/10 px-3 py-1 text-xs">{{ running ? 'running' : 'stopped' }}</div>
-        </div>
-        <div class="mt-4 flex flex-wrap gap-2">
-          <button class="rounded-lg bg-blue-500/30 px-3 py-2 text-sm font-semibold" :disabled="running" @click="start">Start</button>
-          <button class="rounded-lg bg-red-500/30 px-3 py-2 text-sm font-semibold" :disabled="!running" @click="stop">Stop</button>
-          <button class="rounded-lg border border-white/10 px-3 py-2 text-sm" @click="randomize">Random</button>
-          <button class="rounded-lg border border-white/10 px-3 py-2 text-sm" @click="applyProfile('soft')">Soft</button>
-          <button class="rounded-lg border border-white/10 px-3 py-2 text-sm" @click="applyProfile('sleepy')">Sleepy</button>
-          <button class="rounded-lg border border-white/10 px-3 py-2 text-sm" @click="applyProfile('motor')">Motor</button>
-          <button class="rounded-lg border border-white/10 px-3 py-2 text-sm" @click="applyProfile('therapy')">Therapy</button>
-        </div>
-      </section>
+  <CameraOverlayView
+    :set-camera-video-el="setCameraVideoEl"
+    :set-overlay-canvas-el="setOverlayCanvasEl"
+    :camera-enabled="cameraEnabled"
+    :permission-state="permissionState"
+    :camera-status-class="cameraStatusClass"
+    :camera-error="cameraError"
+    :transport-error="transportError"
+    :running="running"
 
-      <section class="rounded-2xl border border-white/10 bg-slate-900/90 p-4">
-        <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <h2 class="text-sm font-semibold">Core controls</h2>
-          <div class="rounded-lg border border-emerald-300/30 bg-emerald-500/10 px-2 py-1 text-xs">
-            Focus: {{ focusedControlLabel }}
-          </div>
-        </div>
-        <div class="grid gap-3 md:grid-cols-2">
-          <div
-            v-for="control in coreControls"
-            :key="control.key"
-            class="rounded-lg border p-2 transition"
-            :class="isControlFocused(control.key) ? 'border-emerald-300/60 bg-emerald-400/10' : 'border-white/10 bg-black/20'"
-          >
-            <label class="text-xs">
-              {{ control.label }} {{ formatControlValue(control) }}
-              <input
-                :value="params[control.key]"
-                @input="onCoreInput(control.key, $event.target.value)"
-                :disabled="isControlDisabled(control.key)"
-                @pointerdown="setFocusedControl(control.key)"
-                type="range"
-                :min="control.min"
-                :max="control.max"
-                :step="control.step"
-                class="w-full"
-              />
-            </label>
-          </div>
-        </div>
-        <div class="mt-2 flex items-center gap-3 text-sm">
-          <label><input v-model="params.syncToBpm" @change="applyParams" type="checkbox" /> Sync pulse</label>
-          <select v-model.number="params.pulseDiv" @change="applyParams" class="rounded bg-black/30 p-1">
-            <option :value="0.5">1/2</option><option :value="1">1/4</option><option :value="2">1/8</option><option :value="4">1/16</option>
-          </select>
-        </div>
-      </section>
+    :debug-mode="debugMode"
+    :show-landmarks="showLandmarks"
+    :mirrored-preview="mirroredPreview"
 
-      <section class="rounded-2xl border border-white/10 bg-slate-900/90 p-4">
-        <div class="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h2 class="text-sm font-semibold">Camera Gesture Control</h2>
-            <p class="text-xs text-slate-400">One open palm swipes focus. Index up/down adjusts focused control. Two-hand open/fist toggles transport.</p>
-          </div>
-          <div class="flex items-center gap-2">
-            <span class="rounded-full border px-2 py-1 text-xs" :class="cameraStatusClass">{{ permissionState }}</span>
-            <button class="rounded-lg border border-white/20 px-3 py-2 text-xs font-semibold" @click="toggleCameraControl">{{ cameraEnabled ? 'Disable Camera Control' : 'Enable Camera Control' }}</button>
-          </div>
-        </div>
+    :banks="banks"
+    :active-bank-index="overlayStore.activeBankIndex"
+    :active-bank-label="activeBankLabel"
+    :active-bank-key="activeBankKey"
 
-        <div class="mt-3 grid gap-3 lg:grid-cols-[1.65fr,1fr]">
-          <div class="relative aspect-video overflow-hidden rounded-xl border border-white/10 bg-black/50">
-            <video ref="cameraVideoRef" autoplay playsinline muted class="h-full w-full object-cover -scale-x-100"></video>
-            <canvas ref="overlayCanvasRef" class="pointer-events-none absolute inset-0 h-full w-full -scale-x-100"></canvas>
-          </div>
+    :active-control-label="activeControlLabel"
+    :active-control-display="activeControlDisplay"
 
-          <div class="rounded-xl border border-white/10 bg-black/20 p-3 text-xs text-slate-200">
-            <p>Focused control: <span class="text-emerald-200">{{ focusedControlLabel }}</span></p>
-            <p>Active gesture: <span class="text-cyan-200">{{ activeGesture }}</span></p>
-            <p>Confidence: {{ Math.round(gestureConfidence * 100) }}%</p>
-            <p>Adjust velocity: {{ adjustVelocity.toFixed(2) }} units/s</p>
-            <p>Last action: {{ lastAction || 'n/a' }}</p>
-            <p>Last action at: {{ lastActionAt || 'n/a' }}</p>
-            <p class="mt-2 text-slate-400">Runtime ready: {{ cameraReady ? 'yes' : 'no' }}</p>
-            <p class="text-slate-400">Model: {{ mediapipeAssets.modelUrl }}</p>
-            <p v-if="cameraError" class="mt-2 text-rose-200">{{ cameraError }}</p>
-          </div>
-        </div>
-      </section>
+    :active-controls="activeControls"
+    :is-control-focused="isFocused"
+    :is-control-disabled="isControlDisabled"
+    :format-control-display="formatDisplay"
 
-      <section class="rounded-2xl border border-white/10 bg-slate-900/90 p-4">
-        <div class="mb-2 flex items-center justify-between"><h2 class="font-semibold">Kick Sequencer</h2><span class="text-xs text-slate-400">{{ seqPos }}</span></div>
-        <div class="mb-2 flex flex-wrap gap-2">
-          <label><input v-model="params.kickOn" @change="applyParams" type="checkbox" /> Kick on</label>
-          <button class="rounded border border-white/10 px-2" @click="setPattern('clear')">Clear</button>
-          <button class="rounded border border-white/10 px-2" @click="setPattern('simple')">Simple</button>
-          <button class="rounded border border-white/10 px-2" @click="setPattern('four')">Four</button>
-          <button class="rounded border border-white/10 px-2" @click="setPattern('random')">Random</button>
-        </div>
-        <div class="grid gap-2 text-xs md:grid-cols-3">
-          <label>Level {{ params.kickLevel.toFixed(2) }}<input v-model.number="params.kickLevel" @input="applyParams" type="range" min="0" max="1" step="0.01" class="w-full" /></label>
-          <label>Decay {{ Math.round(params.kickDecayMs) }}<input v-model.number="params.kickDecayMs" @input="applyParams" type="range" min="40" max="600" step="1" class="w-full" /></label>
-          <label>Swing {{ params.swing.toFixed(2) }}<input v-model.number="params.swing" @input="applyParams" type="range" min="0" max="0.6" step="0.01" class="w-full" /></label>
-        </div>
-        <div class="mt-3 grid gap-2">
-          <div v-for="bar in 4" :key="bar">
-            <div class="mb-1 text-xs text-slate-400">Bar {{ bar }}</div>
-            <div class="grid grid-cols-8 gap-1 md:grid-cols-16">
-              <button v-for="s in 16" :key="s" class="h-6 rounded border" :class="[(params.kickPattern[(bar-1)*16+(s-1)] ? 'bg-blue-400/40 border-blue-300/50':'bg-white/5 border-white/10'), (stepIndex === (bar-1)*16+(s-1) ? 'ring-2 ring-emerald-400/60':'')]" @click="toggleStep((bar-1)*16+(s-1))" />
-            </div>
-          </div>
-        </div>
-      </section>
+    :active-gesture="activeGesture"
+    :gesture-confidence="gestureConfidence"
+    :adjust-velocity="adjustVelocity"
+    :last-action="lastAction"
+    :last-action-at="lastActionAt"
+    :gesture-debug="overlayStore.gestureState"
 
-      <section class="rounded-2xl border border-white/10 bg-slate-900/90 p-4">
-        <canvas ref="scopeCanvas" width="900" height="180" class="w-full rounded-lg border border-white/10 bg-black/30"></canvas>
-      </section>
+    :on-toggle-camera="toggleCameraControl"
+    :on-toggle-debug="toggleDebugMode"
+    :on-toggle-landmarks="toggleLandmarks"
+    :on-toggle-mirror="toggleMirrorMode"
+    :on-select-bank="setActiveBank"
+    :on-focus-control="setActiveControlByKey"
+    :on-number-input="onNumberInput"
+    :on-toggle-control="onToggleControl"
+    :on-enum-select="onEnumSelect"
 
-      <section class="grid gap-3 md:grid-cols-2">
-        <div class="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-slate-300">
-          <p>Audio: {{ audioState }}</p><p>Sample rate: {{ sampleRate }}</p><p>Left: {{ leftHz.toFixed(2) }} Hz</p><p>Right: {{ rightHz.toFixed(2) }} Hz</p>
-        </div>
-        <div class="rounded-xl border border-white/10 bg-black/20 p-3">
-          <textarea v-model="configText" class="h-44 w-full rounded-lg border border-white/10 bg-black/30 p-2 font-mono text-xs"></textarea>
-          <div class="mt-2 flex gap-2">
-            <button class="rounded border border-white/10 px-2 py-1 text-xs" @click="copyConfig">Copy</button>
-            <button class="rounded border border-white/10 px-2 py-1 text-xs" @click="pasteApply">Apply</button>
-            <button class="rounded border border-white/10 px-2 py-1 text-xs" @click="reset">Reset</button>
-          </div>
-        </div>
-      </section>
-    </div>
-  </main>`,
+    :on-start="handleStart"
+    :on-stop="handleStop"
+    :on-randomize="randomize"
+    :on-apply-profile="applyProfile"
+    :on-set-pattern="setPattern"
+  />`,
 };

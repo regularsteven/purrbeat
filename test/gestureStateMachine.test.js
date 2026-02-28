@@ -18,7 +18,7 @@ test('focus swipe uses cooldown', () => {
     timestampMs: 1000,
     hands: [hand({ pose: 'open_palm', vx: 1.2 })],
   });
-  assert.equal(first.events[0]?.type, 'focus_next');
+  assert.equal(first.events[0]?.type, 'swipe_right');
 
   const blockedByCooldown = machine.update({
     timestampMs: 1200,
@@ -30,7 +30,28 @@ test('focus swipe uses cooldown', () => {
     timestampMs: 1500,
     hands: [hand({ pose: 'open_palm', vx: -1.1 })],
   });
-  assert.equal(afterCooldown.events[0]?.type, 'focus_prev');
+  assert.equal(afterCooldown.events[0]?.type, 'swipe_left');
+});
+
+test('mirrored preview inverts horizontal swipe interpretation', () => {
+  const machine = createGestureStateMachine();
+
+  const unmirrored = machine.update({
+    timestampMs: 1000,
+    hands: [hand({ pose: 'open_palm', vx: 1.2 })],
+    mirrorX: false,
+  });
+  assert.equal(unmirrored.events[0]?.type, 'swipe_right');
+
+  machine.reset();
+  const mirrored = machine.update({
+    timestampMs: 2000,
+    hands: [hand({ pose: 'open_palm', vx: 1.2 })],
+    mirrorX: true,
+  });
+  assert.equal(mirrored.events[0]?.type, 'swipe_left');
+  assert.equal(mirrored.debug.mirrored, true);
+  assert.equal(mirrored.debug.interpretedSwipe, 'left');
 });
 
 test('index hold emits continuous adjust events after debounce', () => {

@@ -3,6 +3,7 @@ export const GESTURE_THRESHOLDS = Object.freeze({
   minHandsConfidence: 0.45,
   swipeVelocityX: 0.95,
   swipeCooldownMs: 350,
+  mirrorX: false,
   adjustHoldMs: 120,
   movementScale: 1.8,
   transportTransitionMs: 900,
