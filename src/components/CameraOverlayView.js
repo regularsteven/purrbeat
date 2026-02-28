@@ -43,8 +43,7 @@ export const CameraOverlayView = {
     onToggleControl: { type: Function, required: true },
     onEnumSelect: { type: Function, required: true },
 
-    onStart: { type: Function, required: true },
-    onStop: { type: Function, required: true },
+    onToggleTransport: { type: Function, required: true },
     onRandomize: { type: Function, required: true },
     onApplyProfile: { type: Function, required: true },
     onSetPattern: { type: Function, required: true },
@@ -53,18 +52,8 @@ export const CameraOverlayView = {
     onSliderInput(control, event) {
       this.onNumberInput(control.key, Number(event.target.value));
     },
-    triggerStart() {
-      this.onStart?.();
-    },
-    triggerStop() {
-      this.onStop?.();
-    },
     toggleTransport() {
-      if (this.running) {
-        this.triggerStop();
-        return;
-      }
-      this.triggerStart();
+      this.onToggleTransport?.();
     },
     confidencePct(value) {
       return Math.round((Number(value) || 0) * 100);
@@ -194,7 +183,7 @@ export const CameraOverlayView = {
             class="rounded-lg px-3 py-1.5 font-semibold"
             :class="running ? 'bg-rose-400/25 text-rose-100' : 'bg-emerald-400/25 text-emerald-100'"
             @click.prevent="toggleTransport"
-          >{{ running ? 'Stop' : 'Start' }}</button>
+          >{{ running ? 'Stop playback' : 'Start playback' }}</button>
           <button class="rounded-lg border border-white/20 px-3 py-1.5" @click="onRandomize">Random</button>
           <button class="rounded-lg border border-white/20 px-3 py-1.5" @click="onApplyProfile('soft')">Soft</button>
           <button class="rounded-lg border border-white/20 px-3 py-1.5" @click="onApplyProfile('sleepy')">Sleepy</button>
