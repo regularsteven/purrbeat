@@ -17,6 +17,16 @@ if (!deployDir) {
   process.exit(1);
 }
 
-fs.mkdirSync(deployDir, { recursive: true });
-fs.cpSync(distDir, deployDir, { recursive: true, force: true });
-console.log(`Deployed dist/ to ${deployDir}`);
+const targetDir = path.resolve(root, deployDir);
+fs.mkdirSync(targetDir, { recursive: true });
+
+const copied = [];
+for (const entry of fs.readdirSync(distDir, { withFileTypes: true })) {
+  const source = path.join(distDir, entry.name);
+  const destination = path.join(targetDir, entry.name);
+  fs.cpSync(source, destination, { recursive: true, force: true });
+  copied.push(entry.name);
+}
+
+console.log(`Deployed dist contents to ${targetDir}`);
+console.log(`Copied: ${copied.join(', ')}`);

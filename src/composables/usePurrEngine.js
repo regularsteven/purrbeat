@@ -1,3 +1,4 @@
+import { clampCoreControlValue, isCoreControlKey } from '../config/coreControls.js';
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const dbToGain = (db) => Math.pow(10, db / 20);
 
@@ -115,6 +116,17 @@ export function usePurrEngine() {
     lpFilter?.frequency.setTargetAtTime(clamp(params.lowpassHz, 80, 2000), ctx.currentTime, 0.03);
     if (shaper) shaper.curve = makeSoftClipCurve(clamp(params.drive, 0, 1));
     outGain?.gain.setTargetAtTime(dbToGain(params.outDb), ctx.currentTime, 0.04);
+  }
+
+  function setCoreParam(key, value) {
+    if (!isCoreControlKey(key)) return;
+    params[key] = clampCoreControlValue(key, value);
+    applyParams();
+  }
+
+  function nudgeCoreParam(key, delta) {
+    if (!isCoreControlKey(key)) return;
+    setCoreParam(key, Number(params[key]) + Number(delta));
   }
 
   function sixteenthDur() {
@@ -333,6 +345,8 @@ export function usePurrEngine() {
     applyParams,
     applyProfile,
     randomize,
+    setCoreParam,
+    nudgeCoreParam,
     toggleStep,
     setPattern,
     reset,
