@@ -1,0 +1,14 @@
+# Environment configuration
+.env
+.env.*
+!.env.example
+
+# Build/deploy output
+dist/
+public_html/
+
+# Node artifacts
+node_modules/
+
+# macOS
+.DS_Store
