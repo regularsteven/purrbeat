@@ -22,7 +22,7 @@ jobs:
 
       - name: Deploy via SSH
         run: |
-          ssh -i ~/.ssh/id_ed25519 steven@purrbeat.codysites.com << 'EOF'
+          ssh -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -i ~/.ssh/id_ed25519 steven@purrbeat.codysites.com << 'EOF'
             cd /Users/steven/Projects/codysites.com/purrbeat/purrbeat-repo
             git pull origin main
             npm install
