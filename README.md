@@ -30,3 +30,24 @@ npm run deploy
 - `src/composables/usePurrEngine.js` - WebAudio engine and sequencer logic
 - `scripts/build.mjs` - build output creator
 - `scripts/deploy.mjs` - env-driven deploy copier
+
+
+## Git hygiene after build/deploy
+
+Recommended `.gitignore` entries include `.env` and `dist/` (already configured in this repo).
+
+On macOS, if these files were already created and showing up as untracked, run:
+
+```bash
+git status
+git add .gitignore
+git rm -r --cached dist public_html 2>/dev/null || true
+rm -f .env
+git status
+```
+
+If `package-lock.json` was created and you want reproducible installs, keep and commit it:
+
+```bash
+git add package-lock.json
+```
