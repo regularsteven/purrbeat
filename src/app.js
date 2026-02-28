@@ -409,8 +409,7 @@ export const App = {
     :on-toggle-control="onToggleControl"
     :on-enum-select="onEnumSelect"
 
-    :on-start="handleStart"
-    :on-stop="handleStop"
+    :on-toggle-transport="running ? handleStop : handleStart"
     :on-randomize="randomize"
     :on-apply-profile="applyProfile"
     :on-set-pattern="setPattern"
