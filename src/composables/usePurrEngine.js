@@ -17,41 +17,67 @@ const DEFAULT = {
   kickOn: true,
   kickLevel: 0.55,
   kickDecayMs: 180,
+  snareOn: true,
+  snareLevel: 0.4,
+  snareToneHz: 1900,
+  snareDecayMs: 120,
   swing: 0.12,
-  kickPattern: Array.from({ length: 64 }, (_, i) => (i === 0 ? 1 : 0)),
+  loopBars: 2,
+  segmentsPerBar: 16,
+  kickPattern: Array.from({ length: 256 }, (_, i) => (i % 32 === 0 ? 1 : 0)),
+  snarePattern: Array.from({ length: 256 }, (_, i) => (i % 32 === 16 ? 1 : 0)),
 };
 
 const PROFILES = {
   soft: {
     bpm: 78, syncToBpm: true, pulseDiv: 1,
     baseHz: 24, binauralHz: 1.8, pulseDepth: 0.45, noiseAmt: 0.18, lowpassHz: 320, drive: 0.12, outDb: -20,
-    kickOn: true, kickLevel: 0.45, kickDecayMs: 170, swing: 0.10,
-    kickPattern: Array.from({ length: 64 }, (_, i) => (i % 16 === 0 ? 1 : 0)),
+    kickOn: true, kickLevel: 0.45, kickDecayMs: 170,
+    snareOn: true, snareLevel: 0.35, snareToneHz: 1700, snareDecayMs: 140,
+    swing: 0.10, loopBars: 2, segmentsPerBar: 16,
+    kickPattern: Array.from({ length: 256 }, (_, i) => (i % 32 === 0 ? 1 : 0)),
+    snarePattern: Array.from({ length: 256 }, (_, i) => (i % 32 === 16 ? 1 : 0)),
   },
   sleepy: {
     bpm: 64, syncToBpm: true, pulseDiv: 0.5,
     baseHz: 20, binauralHz: 0.9, pulseDepth: 0.35, noiseAmt: 0.15, lowpassHz: 260, drive: 0.10, outDb: -22,
-    kickOn: false, kickLevel: 0, kickDecayMs: 200, swing: 0,
-    kickPattern: Array.from({ length: 64 }, () => 0),
+    kickOn: false, kickLevel: 0, kickDecayMs: 200,
+    snareOn: false, snareLevel: 0, snareToneHz: 1400, snareDecayMs: 160,
+    swing: 0, loopBars: 2, segmentsPerBar: 16,
+    kickPattern: Array.from({ length: 256 }, () => 0),
+    snarePattern: Array.from({ length: 256 }, () => 0),
   },
   motor: {
     bpm: 112, syncToBpm: true, pulseDiv: 2,
     baseHz: 48, binauralHz: 4.2, pulseDepth: 0.75, noiseAmt: 0.10, lowpassHz: 520, drive: 0.22, outDb: -20,
-    kickOn: true, kickLevel: 0.70, kickDecayMs: 140, swing: 0.06,
-    kickPattern: Array.from({ length: 64 }, (_, i) => (i % 8 === 0 ? 1 : 0)),
+    kickOn: true, kickLevel: 0.70, kickDecayMs: 140,
+    snareOn: true, snareLevel: 0.5, snareToneHz: 2200, snareDecayMs: 100,
+    swing: 0.06, loopBars: 2, segmentsPerBar: 16,
+    kickPattern: Array.from({ length: 256 }, (_, i) => (i % 16 === 0 ? 1 : 0)),
+    snarePattern: Array.from({ length: 256 }, (_, i) => (i % 16 === 8 ? 1 : 0)),
   },
   therapy: {
     bpm: 96, syncToBpm: true, pulseDiv: 1,
     baseHz: 30, binauralHz: 3.8, pulseDepth: 0.55, noiseAmt: 0.20, lowpassHz: 420, drive: 0.16, outDb: -19,
-    kickOn: true, kickLevel: 0.55, kickDecayMs: 180, swing: 0.14,
-    kickPattern: Array.from({ length: 64 }, (_, i) => (i % 16 === 0 ? 1 : (i % 16 === 8 ? 1 : 0))),
+    kickOn: true, kickLevel: 0.55, kickDecayMs: 180,
+    snareOn: true, snareLevel: 0.42, snareToneHz: 1850, snareDecayMs: 120,
+    swing: 0.14, loopBars: 2, segmentsPerBar: 16,
+    kickPattern: Array.from({ length: 256 }, (_, i) => (i % 32 === 0 || i % 32 === 24 ? 1 : 0)),
+    snarePattern: Array.from({ length: 256 }, (_, i) => (i % 32 === 16 ? 1 : 0)),
   },
 };
+
+const MAX_STEPS = 256;
+
+const PERCUSSION_TRACKS = Object.freeze([
+  Object.freeze({ key: 'kick', label: 'Kick', enabledParam: 'kickOn', patternParam: 'kickPattern' }),
+  Object.freeze({ key: 'snare', label: 'Snare', enabledParam: 'snareOn', patternParam: 'snarePattern' }),
+]);
 
 export function usePurrEngine() {
   const scopeCanvas = Vue.ref(null);
   const running = Vue.ref(false);
-  const params = Vue.reactive({ ...DEFAULT, kickPattern: [...DEFAULT.kickPattern] });
+  const params = Vue.reactive({ ...DEFAULT, kickPattern: [...DEFAULT.kickPattern], snarePattern: [...DEFAULT.snarePattern] });
   const stepIndex = Vue.ref(0);
 
   let ctx = null;
@@ -65,8 +91,18 @@ export function usePurrEngine() {
 
   const leftHz = Vue.computed(() => Math.max(0.01, params.baseHz - params.binauralHz / 2));
   const rightHz = Vue.computed(() => Math.max(0.01, params.baseHz + params.binauralHz / 2));
-  const seqPos = Vue.computed(() => `bar ${Math.floor(stepIndex.value / 16) + 1} • step ${(stepIndex.value % 16) + 1}`);
+  const totalSteps = Vue.computed(() => clamp(Math.round(params.loopBars * params.segmentsPerBar), 1, MAX_STEPS));
+  const seqPos = Vue.computed(() => {
+    const segments = clamp(Number(params.segmentsPerBar) || 16, 1, 32);
+    return `bar ${Math.floor(stepIndex.value / segments) + 1} • step ${(stepIndex.value % segments) + 1}`;
+  });
   const configJson = Vue.computed(() => JSON.stringify(params, null, 2));
+  const percussionTracks = Vue.computed(() => PERCUSSION_TRACKS.map((track) => ({
+    key: track.key,
+    label: track.label,
+    enabled: Boolean(params[track.enabledParam]),
+    pattern: (params[track.patternParam] || []).slice(0, totalSteps.value),
+  })));
 
   function inferFromBpm() {
     if (params.syncToBpm) params.pulseHz = (params.bpm / 60) * parseFloat(params.pulseDiv || 1);
@@ -130,7 +166,8 @@ export function usePurrEngine() {
   }
 
   function sixteenthDur() {
-    return 60 / clamp(params.bpm, 30, 260) / 4;
+    const stepsPerBeat = clamp(Number(params.segmentsPerBar) || 16, 4, 32) / 4;
+    return 60 / clamp(params.bpm, 30, 260) / stepsPerBeat;
   }
 
   function triggerKick(time) {
@@ -170,6 +207,32 @@ export function usePurrEngine() {
       const swingDelay = idx % 2 === 1 ? sixteenthDur() * clamp(params.swing, 0, 0.6) * 0.5 : 0;
       triggerKick(time + swingDelay);
     }
+    if (params.snarePattern[idx]) {
+      triggerSnare(time);
+    }
+  }
+
+  function triggerSnare(time) {
+    if (!ctx || !drumBus || !params.snareOn) return;
+    const decay = clamp(params.snareDecayMs, 40, 600) / 1000;
+
+    const noise = ctx.createBufferSource();
+    noise.buffer = createNoiseBuffer(ctx, 0.5);
+    const noiseFilterNode = ctx.createBiquadFilter();
+    noiseFilterNode.type = 'bandpass';
+    noiseFilterNode.frequency.setValueAtTime(clamp(params.snareToneHz, 600, 6000), time);
+    noiseFilterNode.Q.setValueAtTime(1, time);
+    const noiseGainNode = ctx.createGain();
+
+    noiseGainNode.gain.setValueAtTime(0.0001, time);
+    noiseGainNode.gain.exponentialRampToValueAtTime(Math.max(0.0001, clamp(params.snareLevel, 0, 1)), time + 0.002);
+    noiseGainNode.gain.exponentialRampToValueAtTime(0.0001, time + decay);
+
+    noise.connect(noiseFilterNode);
+    noiseFilterNode.connect(noiseGainNode);
+    noiseGainNode.connect(drumBus);
+    noise.start(time);
+    noise.stop(time + decay + 0.03);
   }
 
   function scheduler() {
@@ -177,7 +240,7 @@ export function usePurrEngine() {
     while (nextStepTime < ctx.currentTime + scheduleAheadTime) {
       scheduleStep(stepIndex.value, nextStepTime);
       nextStepTime += sixteenthDur();
-      stepIndex.value = (stepIndex.value + 1) % 64;
+      stepIndex.value = (stepIndex.value + 1) % totalSteps.value;
     }
   }
 
@@ -274,7 +337,7 @@ export function usePurrEngine() {
   function applyProfile(name) {
     const profile = PROFILES[name];
     if (!profile) return;
-    Object.assign(params, profile, { kickPattern: [...profile.kickPattern] });
+    Object.assign(params, profile, { kickPattern: [...profile.kickPattern], snarePattern: [...profile.snarePattern] });
     applyParams();
   }
 
@@ -291,28 +354,56 @@ export function usePurrEngine() {
     params.drive = r(0, 0.35);
     params.outDb = r(-28, -14);
     params.kickOn = Math.random() > 0.2;
+    params.snareOn = Math.random() > 0.25;
     params.kickLevel = r(0.3, 0.8);
     params.kickDecayMs = Math.round(r(90, 260));
+    params.snareLevel = r(0.2, 0.65);
+    params.snareToneHz = Math.round(r(1000, 3200));
+    params.snareDecayMs = Math.round(r(70, 220));
     params.swing = r(0, 0.2);
-    params.kickPattern = Array.from({ length: 64 }, (_, i) => (i % 16 === 0 ? 1 : (Math.random() < 0.08 ? 1 : 0)));
+    params.loopBars = [1, 2, 4][Math.floor(Math.random() * 3)];
+    params.segmentsPerBar = [8, 16, 32][Math.floor(Math.random() * 3)];
+    params.kickPattern = Array.from({ length: MAX_STEPS }, (_, i) => (i % 16 === 0 ? 1 : (Math.random() < 0.08 ? 1 : 0)));
+    params.snarePattern = Array.from({ length: MAX_STEPS }, (_, i) => (i % 16 === 8 ? 1 : (Math.random() < 0.04 ? 1 : 0)));
     applyParams();
   }
 
   function toggleStep(i) {
-    params.kickPattern[i] = params.kickPattern[i] ? 0 : 1;
+    toggleTrackStep('kick', i);
   }
 
   function setPattern(mode) {
-    params.kickPattern = Array.from({ length: 64 }, (_, i) => {
+    setTrackPattern('kick', mode);
+  }
+
+  function toggleTrackEnabled(trackKey) {
+    const track = PERCUSSION_TRACKS.find((item) => item.key === trackKey);
+    if (!track) return;
+    params[track.enabledParam] = !params[track.enabledParam];
+  }
+
+  function toggleTrackStep(trackKey, i) {
+    const track = PERCUSSION_TRACKS.find((item) => item.key === trackKey);
+    if (!track || i < 0 || i >= MAX_STEPS) return;
+    const pattern = params[track.patternParam];
+    pattern[i] = pattern[i] ? 0 : 1;
+  }
+
+  function setTrackPattern(trackKey, mode) {
+    const track = PERCUSSION_TRACKS.find((item) => item.key === trackKey);
+    if (!track) return;
+    params[track.patternParam] = Array.from({ length: MAX_STEPS }, (_, i) => {
       if (mode === 'clear') return 0;
-      if (mode === 'simple') return i === 0 ? 1 : 0;
-      if (mode === 'four') return i % 16 === 0 ? 1 : 0;
-      return i % 16 === 0 || Math.random() < 0.12 ? 1 : 0;
+      if (mode === 'simple') return trackKey === 'snare' ? (i % 16 === 8 ? 1 : 0) : (i === 0 ? 1 : 0);
+      if (mode === 'four') return trackKey === 'snare' ? (i % 16 === 8 ? 1 : 0) : (i % 16 === 0 ? 1 : 0);
+      if (mode === 'backbeat') return trackKey === 'snare' ? (i % 16 === 4 || i % 16 === 12 ? 1 : 0) : (i % 16 === 0 ? 1 : 0);
+      const chance = trackKey === 'snare' ? 0.09 : 0.12;
+      return i % 16 === (trackKey === 'snare' ? 8 : 0) || Math.random() < chance ? 1 : 0;
     });
   }
 
   function reset() {
-    Object.assign(params, { ...DEFAULT, kickPattern: [...DEFAULT.kickPattern] });
+    Object.assign(params, { ...DEFAULT, kickPattern: [...DEFAULT.kickPattern], snarePattern: [...DEFAULT.snarePattern] });
     applyParams();
   }
 
@@ -323,9 +414,10 @@ export function usePurrEngine() {
   function applyConfig(text) {
     const obj = JSON.parse(text);
     Object.assign(params, obj);
-    if (Array.isArray(obj.kickPattern)) {
-      params.kickPattern = [...obj.kickPattern].slice(0, 64).map((x) => (x ? 1 : 0));
-    }
+    params.loopBars = clamp(Number(obj.loopBars) || params.loopBars, 1, 8);
+    params.segmentsPerBar = [8, 16, 32].includes(Number(obj.segmentsPerBar)) ? Number(obj.segmentsPerBar) : params.segmentsPerBar;
+    params.kickPattern = Array.from({ length: MAX_STEPS }, (_, i) => (obj.kickPattern?.[i] ? 1 : 0));
+    params.snarePattern = Array.from({ length: MAX_STEPS }, (_, i) => (obj.snarePattern?.[i] ? 1 : 0));
     applyParams();
   }
 
@@ -338,6 +430,8 @@ export function usePurrEngine() {
     rightHz,
     seqPos,
     configJson,
+    percussionTracks,
+    totalSteps,
     audioState: Vue.computed(() => (ctx ? ctx.state : 'n/a')),
     sampleRate: Vue.computed(() => (ctx ? `${ctx.sampleRate} Hz` : 'n/a')),
     start,
@@ -349,6 +443,9 @@ export function usePurrEngine() {
     nudgeCoreParam,
     toggleStep,
     setPattern,
+    toggleTrackEnabled,
+    toggleTrackStep,
+    setTrackPattern,
     reset,
     copyConfig,
     applyConfig,

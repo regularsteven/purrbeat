@@ -215,6 +215,21 @@ export const App = {
       setControlValue(key, value);
     }
 
+    function onToggleTrackEnabled(trackKey) {
+      setActiveBank(CONTROL_BANKS.findIndex((bank) => bank.key === 'kick'));
+      engine.toggleTrackEnabled(trackKey);
+    }
+
+    function onToggleTrackStep(trackKey, stepIndex) {
+      setActiveBank(CONTROL_BANKS.findIndex((bank) => bank.key === 'kick'));
+      engine.toggleTrackStep(trackKey, stepIndex);
+    }
+
+    function onSetTrackPattern(trackKey, mode) {
+      setActiveBank(CONTROL_BANKS.findIndex((bank) => bank.key === 'kick'));
+      engine.setTrackPattern(trackKey, mode);
+    }
+
     const cameraStatusClass = Vue.computed(() => {
       if (gesture.permissionState.value === 'granted' && gesture.cameraEnabled.value) {
         return 'border-emerald-300/30 bg-emerald-400/20 text-emerald-100';
@@ -362,6 +377,11 @@ export const App = {
       isFocused,
       isControlDisabled,
       formatDisplay,
+      percussionTracks: engine.percussionTracks,
+      totalSteps: engine.totalSteps,
+      onToggleTrackEnabled,
+      onToggleTrackStep,
+      onSetTrackPattern,
     };
   },
   template: `
@@ -413,5 +433,11 @@ export const App = {
     :on-randomize="randomize"
     :on-apply-profile="applyProfile"
     :on-set-pattern="setPattern"
+    :percussion-tracks="percussionTracks"
+    :total-steps="totalSteps"
+
+    :on-toggle-track-enabled="onToggleTrackEnabled"
+    :on-toggle-track-step="onToggleTrackStep"
+    :on-set-track-pattern="onSetTrackPattern"
   />`,
 };
