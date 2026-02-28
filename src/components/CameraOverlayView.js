@@ -33,6 +33,9 @@ export const CameraOverlayView = {
     lastActionAt: { type: String, default: '' },
     gestureDebug: { type: Object, required: true },
 
+    percussionTracks: { type: Array, required: true },
+    totalSteps: { type: Number, required: true },
+
     onToggleCamera: { type: Function, required: true },
     onToggleDebug: { type: Function, required: true },
     onToggleLandmarks: { type: Function, required: true },
@@ -47,6 +50,9 @@ export const CameraOverlayView = {
     onRandomize: { type: Function, required: true },
     onApplyProfile: { type: Function, required: true },
     onSetPattern: { type: Function, required: true },
+    onToggleTrackEnabled: { type: Function, required: true },
+    onToggleTrackStep: { type: Function, required: true },
+    onSetTrackPattern: { type: Function, required: true },
   },
   methods: {
     onSliderInput(control, event) {
@@ -57,6 +63,9 @@ export const CameraOverlayView = {
     },
     confidencePct(value) {
       return Math.round((Number(value) || 0) * 100);
+    },
+    stepIsActive(track, step) {
+      return Boolean(track.pattern?.[step]);
     },
   },
   template: `
@@ -126,7 +135,7 @@ export const CameraOverlayView = {
       </div>
 
       <div class="space-y-2">
-        <div class="pointer-events-auto grid gap-2 rounded-2xl border border-white/10 bg-slate-900/52 p-2 shadow-2xl backdrop-blur-md sm:grid-cols-2 lg:grid-cols-3">
+        <div class="pointer-events-auto grid max-h-[32vh] gap-2 overflow-y-auto rounded-2xl border border-white/10 bg-slate-900/52 p-2 shadow-2xl backdrop-blur-md sm:grid-cols-2 lg:grid-cols-3">
           <article
             v-for="control in activeControls"
             :key="control.key"
@@ -178,6 +187,57 @@ export const CameraOverlayView = {
           </article>
         </div>
 
+        <div class="pointer-events-auto rounded-2xl border border-white/10 bg-slate-950/70 p-2 shadow-xl backdrop-blur-sm">
+          <div class="mb-2 flex items-center justify-between gap-3">
+            <div>
+              <p class="text-[0.65rem] uppercase tracking-[0.16em] text-cyan-200/90">Percussion sequencer</p>
+              <p class="text-xs text-slate-300">{{ totalSteps }} total steps • horizontal scroll on mobile</p>
+            </div>
+            <div class="flex flex-wrap gap-1.5 text-xs">
+              <button class="rounded-md border border-white/20 px-2 py-1" @click="onSetPattern('clear')">Clear kick</button>
+              <button class="rounded-md border border-white/20 px-2 py-1" @click="onSetPattern('simple')">Simple kick</button>
+              <button class="rounded-md border border-white/20 px-2 py-1" @click="onSetPattern('four')">4-on-floor</button>
+              <button class="rounded-md border border-white/20 px-2 py-1" @click="onSetPattern('random')">Rnd kick</button>
+            </div>
+          </div>
+
+          <div class="space-y-2 overflow-x-auto pb-1">
+            <article
+              v-for="track in percussionTracks"
+              :key="track.key"
+              class="min-w-[540px] rounded-xl border border-white/10 bg-black/35 p-2"
+            >
+              <div class="mb-2 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <p class="text-xs font-semibold text-white">{{ track.label }}</p>
+                  <button
+                    class="rounded-md border px-2 py-0.5 text-[0.65rem]"
+                    :class="track.enabled ? 'border-emerald-300/70 bg-emerald-400/20 text-emerald-100' : 'border-white/20 bg-black/30 text-slate-300'"
+                    @click="onToggleTrackEnabled(track.key)"
+                  >{{ track.enabled ? 'On' : 'Off' }}</button>
+                </div>
+                <div class="flex gap-1 text-[0.65rem]">
+                  <button class="rounded border border-white/20 px-1.5 py-0.5" @click="onSetTrackPattern(track.key, 'clear')">Clear</button>
+                  <button class="rounded border border-white/20 px-1.5 py-0.5" @click="onSetTrackPattern(track.key, 'simple')">Simple</button>
+                  <button class="rounded border border-white/20 px-1.5 py-0.5" @click="onSetTrackPattern(track.key, 'backbeat')">Backbeat</button>
+                  <button class="rounded border border-white/20 px-1.5 py-0.5" @click="onSetTrackPattern(track.key, 'random')">Random</button>
+                </div>
+              </div>
+
+              <div class="grid grid-flow-col auto-cols-[1rem] gap-1">
+                <button
+                  v-for="step in totalSteps"
+                  :key="step"
+                  class="h-6 rounded border transition"
+                  :class="stepIsActive(track, step - 1) ? 'border-cyan-200/80 bg-cyan-300/45' : 'border-white/15 bg-white/5'"
+                  @click="onToggleTrackStep(track.key, step - 1)"
+                  :title="track.label + ' step ' + step"
+                ></button>
+              </div>
+            </article>
+          </div>
+        </div>
+
         <div class="pointer-events-auto flex flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-slate-900/50 p-2 text-xs shadow-xl backdrop-blur-sm">
           <button
             class="rounded-lg px-3 py-1.5 font-semibold"
@@ -189,14 +249,6 @@ export const CameraOverlayView = {
           <button class="rounded-lg border border-white/20 px-3 py-1.5" @click="onApplyProfile('sleepy')">Sleepy</button>
           <button class="rounded-lg border border-white/20 px-3 py-1.5" @click="onApplyProfile('motor')">Motor</button>
           <button class="rounded-lg border border-white/20 px-3 py-1.5" @click="onApplyProfile('therapy')">Therapy</button>
-
-          <template v-if="activeBankKey === 'kick'">
-            <span class="mx-1 h-4 w-px bg-white/20"></span>
-            <button class="rounded-lg border border-white/20 px-2 py-1" @click="onSetPattern('clear')">Clear</button>
-            <button class="rounded-lg border border-white/20 px-2 py-1" @click="onSetPattern('simple')">Simple</button>
-            <button class="rounded-lg border border-white/20 px-2 py-1" @click="onSetPattern('four')">Four</button>
-            <button class="rounded-lg border border-white/20 px-2 py-1" @click="onSetPattern('random')">Random</button>
-          </template>
         </div>
 
         <div v-if="transportError" class="pointer-events-auto rounded-xl border border-rose-300/40 bg-rose-500/20 px-3 py-2 text-xs text-rose-100">
