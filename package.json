@@ -8,9 +8,13 @@
     "prebuild": "npm run prepare:mediapipe",
     "build": "node scripts/build.mjs",
     "deploy": "node scripts/deploy.mjs",
-    "test": "node --test"
+    "test": "node --test",
+    "dev": "node scripts/dev.mjs"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^0.10.32"
+  },
+  "devDependencies": {
+    "chokidar": "^3.5.3"
   }
 }
