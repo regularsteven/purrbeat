@@ -1,5 +1,7 @@
 import { clampCoreControlValue, isCoreControlKey } from '../config/coreControls.js';
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const SNARE_LEVEL_MAX = 1.5;
+const SNARE_LEVEL_DEFAULT = 0.65;
 const dbToGain = (db) => Math.pow(10, db / 20);
 
 const DEFAULT = {
@@ -18,7 +20,7 @@ const DEFAULT = {
   kickLevel: 0.55,
   kickDecayMs: 180,
   snareOn: true,
-  snareLevel: 0.4,
+  snareLevel: SNARE_LEVEL_DEFAULT,
   snareToneHz: 1900,
   snareDecayMs: 120,
   swing: 0.12,
@@ -33,7 +35,7 @@ const PROFILES = {
     bpm: 78, syncToBpm: true, pulseDiv: 1,
     baseHz: 24, binauralHz: 1.8, pulseDepth: 0.45, noiseAmt: 0.18, lowpassHz: 320, drive: 0.12, outDb: -20,
     kickOn: true, kickLevel: 0.45, kickDecayMs: 170,
-    snareOn: true, snareLevel: 0.35, snareToneHz: 1700, snareDecayMs: 140,
+    snareOn: true, snareLevel: 0.45, snareToneHz: 1700, snareDecayMs: 140,
     swing: 0.10, loopBars: 2, segmentsPerBar: 16,
     kickPattern: Array.from({ length: 256 }, (_, i) => (i % 32 === 0 ? 1 : 0)),
     snarePattern: Array.from({ length: 256 }, (_, i) => (i % 32 === 16 ? 1 : 0)),
@@ -51,7 +53,7 @@ const PROFILES = {
     bpm: 112, syncToBpm: true, pulseDiv: 2,
     baseHz: 48, binauralHz: 4.2, pulseDepth: 0.75, noiseAmt: 0.10, lowpassHz: 520, drive: 0.22, outDb: -20,
     kickOn: true, kickLevel: 0.70, kickDecayMs: 140,
-    snareOn: true, snareLevel: 0.5, snareToneHz: 2200, snareDecayMs: 100,
+    snareOn: true, snareLevel: 0.7, snareToneHz: 2200, snareDecayMs: 100,
     swing: 0.06, loopBars: 2, segmentsPerBar: 16,
     kickPattern: Array.from({ length: 256 }, (_, i) => (i % 16 === 0 ? 1 : 0)),
     snarePattern: Array.from({ length: 256 }, (_, i) => (i % 16 === 8 ? 1 : 0)),
@@ -60,7 +62,7 @@ const PROFILES = {
     bpm: 96, syncToBpm: true, pulseDiv: 1,
     baseHz: 30, binauralHz: 3.8, pulseDepth: 0.55, noiseAmt: 0.20, lowpassHz: 420, drive: 0.16, outDb: -19,
     kickOn: true, kickLevel: 0.55, kickDecayMs: 180,
-    snareOn: true, snareLevel: 0.42, snareToneHz: 1850, snareDecayMs: 120,
+    snareOn: true, snareLevel: 0.65, snareToneHz: 1850, snareDecayMs: 120,
     swing: 0.14, loopBars: 2, segmentsPerBar: 16,
     kickPattern: Array.from({ length: 256 }, (_, i) => (i % 32 === 0 || i % 32 === 24 ? 1 : 0)),
     snarePattern: Array.from({ length: 256 }, (_, i) => (i % 32 === 16 ? 1 : 0)),
@@ -225,7 +227,8 @@ export function usePurrEngine() {
     const noiseGainNode = ctx.createGain();
 
     noiseGainNode.gain.setValueAtTime(0.0001, time);
-    noiseGainNode.gain.exponentialRampToValueAtTime(Math.max(0.0001, clamp(params.snareLevel, 0, 1)), time + 0.002);
+    const snareLevel = clamp(params.snareLevel, 0, SNARE_LEVEL_MAX);
+    noiseGainNode.gain.exponentialRampToValueAtTime(Math.max(0.0001, snareLevel), time + 0.002);
     noiseGainNode.gain.exponentialRampToValueAtTime(0.0001, time + decay);
 
     noise.connect(noiseFilterNode);
@@ -357,7 +360,7 @@ export function usePurrEngine() {
     params.snareOn = Math.random() > 0.25;
     params.kickLevel = r(0.3, 0.8);
     params.kickDecayMs = Math.round(r(90, 260));
-    params.snareLevel = r(0.2, 0.65);
+    params.snareLevel = r(0.3, Math.min(SNARE_LEVEL_MAX, 1.2));
     params.snareToneHz = Math.round(r(1000, 3200));
     params.snareDecayMs = Math.round(r(70, 220));
     params.swing = r(0, 0.2);
