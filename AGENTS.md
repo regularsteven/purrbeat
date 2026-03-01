@@ -23,3 +23,4 @@
 - **Steve only approves the `test → main` PR.** He doesn’t approve merges from feature branches into `dev` or from `dev` into `test`; those are handled without explicit sign-off.
 - **Agent responsibility:** On this project I merge features into `dev`, then merge `dev` into `test` so you can `git checkout test && git pull`, and I share the final PR link when you say “I want this live.” You are the one who opens/merges `test → main`. 
 - **Workflow reminder:** I manage every feature→dev and dev→test merge; you only approve the `test → main` pull request once you confirm you want it live.
+- **PR links:** I only send you a pull request link when it’s the `test → main` PR you’re approving; you won’t see links to dev/feature merges so this stays consistent.
