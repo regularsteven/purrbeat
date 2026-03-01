@@ -79,7 +79,7 @@ export const CameraOverlayView = {
   },
   template: `
   <main
-    class="relative min-h-screen overflow-hidden bg-emerald-950 text-slate-100"
+    class="relative min-h-screen overflow-hidden bg-slate-900 text-slate-100"
     style="font-family: 'Avenir Next', 'Trebuchet MS', 'Segoe UI', sans-serif;"
   >
     <video
@@ -97,7 +97,7 @@ export const CameraOverlayView = {
       :class="[mirroredPreview ? '-scale-x-100' : '', (showLandmarks || debugMode) ? 'opacity-100' : 'opacity-0']"
     ></canvas>
 
-    <div class="pointer-events-none absolute inset-0 bg-gradient-to-b from-emerald-950/60 via-emerald-900/10 to-emerald-950/85"></div>
+    <div class="pointer-events-none absolute inset-0 bg-gradient-to-b from-slate-900/60 via-slate-800/10 to-slate-900/85"></div>
 
     <section
       class="absolute inset-0 flex flex-col justify-between px-3 py-3 sm:px-5 sm:py-5"
