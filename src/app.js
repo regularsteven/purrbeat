@@ -10,6 +10,7 @@ import {
 import { CameraOverlayView } from './components/CameraOverlayView.js';
 import { useGestureControl } from './composables/useGestureControl.js';
 import { usePurrEngine } from './composables/usePurrEngine.js';
+import { APP_VERSION } from './version.js';
 
 const DISCRETE_GESTURE_COOLDOWN_MS = 240;
 
@@ -382,6 +383,7 @@ export const App = {
       onToggleTrackEnabled,
       onToggleTrackStep,
       onSetTrackPattern,
+      appVersion: APP_VERSION,
     };
   },
   template: `
@@ -439,5 +441,6 @@ export const App = {
     :on-toggle-track-enabled="onToggleTrackEnabled"
     :on-toggle-track-step="onToggleTrackStep"
     :on-set-track-pattern="onSetTrackPattern"
+    :app-version="appVersion"
   />`,
 };

@@ -53,6 +53,12 @@ export const CameraOverlayView = {
     onToggleTrackEnabled: { type: Function, required: true },
     onToggleTrackStep: { type: Function, required: true },
     onSetTrackPattern: { type: Function, required: true },
+    appVersion: { type: String, required: true },
+  },
+  data() {
+    return {
+      menuOpen: false,
+    };
   },
   methods: {
     onSliderInput(control, event) {
@@ -66,6 +72,9 @@ export const CameraOverlayView = {
     },
     stepIsActive(track, step) {
       return Boolean(track.pattern?.[step]);
+    },
+    toggleMenu() {
+      this.menuOpen = !this.menuOpen;
     },
   },
   template: `
@@ -104,20 +113,54 @@ export const CameraOverlayView = {
             <p class="text-xs text-slate-300">Transport: <span :class="running ? 'text-emerald-200' : 'text-slate-300'">{{ running ? 'Running' : 'Stopped' }}</span></p>
           </div>
 
-          <div class="flex max-w-[56vw] flex-wrap justify-end gap-2 text-xs">
-            <span class="rounded-full border px-2 py-1" :class="cameraStatusClass">{{ permissionState }}</span>
-            <button class="pointer-events-auto rounded-full border border-white/20 bg-black/35 px-3 py-1.5" @click="onToggleCamera">
-              {{ cameraEnabled ? 'Camera off' : 'Camera on' }}
+          <div class="relative">
+            <button
+              class="pointer-events-auto inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-black/45 text-white shadow-lg backdrop-blur-sm transition hover:bg-black/55"
+              @click="toggleMenu"
+              :aria-expanded="menuOpen ? 'true' : 'false'"
+              aria-label="Toggle controls menu"
+            >
+              <svg viewBox="0 0 24 24" class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <path d="M4 7h16" />
+                <path d="M4 12h16" />
+                <path d="M4 17h16" />
+              </svg>
             </button>
-            <button class="pointer-events-auto rounded-full border border-white/20 bg-black/35 px-3 py-1.5" @click="onToggleDebug">
-              {{ debugMode ? 'Debug off' : 'Debug on' }}
-            </button>
-            <button class="pointer-events-auto rounded-full border border-white/20 bg-black/35 px-3 py-1.5" @click="onToggleLandmarks">
-              {{ showLandmarks ? 'Landmarks on' : 'Landmarks off' }}
-            </button>
-            <button class="pointer-events-auto rounded-full border border-white/20 bg-black/35 px-3 py-1.5" @click="onToggleMirror">
-              {{ mirroredPreview ? 'Mirror on' : 'Mirror off' }}
-            </button>
+
+            <transition
+              enter-active-class="transition duration-200 ease-out"
+              enter-from-class="translate-x-4 opacity-0"
+              enter-to-class="translate-x-0 opacity-100"
+              leave-active-class="transition duration-150 ease-in"
+              leave-from-class="translate-x-0 opacity-100"
+              leave-to-class="translate-x-4 opacity-0"
+            >
+              <div
+                v-if="menuOpen"
+                class="pointer-events-auto absolute right-0 mt-2 w-[min(84vw,18rem)] rounded-2xl border border-white/15 bg-slate-900/90 p-3 text-xs shadow-2xl backdrop-blur-md"
+              >
+                <div class="mb-3 flex items-center justify-between gap-2">
+                  <span class="rounded-full border px-2 py-1" :class="cameraStatusClass">{{ permissionState }}</span>
+                  <p class="text-[0.65rem] uppercase tracking-[0.12em] text-slate-300">v{{ appVersion }}</p>
+                </div>
+                <label class="mb-2 flex items-center justify-between rounded-lg border border-white/10 bg-black/25 px-2.5 py-2">
+                  <span>Camera</span>
+                  <input type="checkbox" :checked="cameraEnabled" @change="onToggleCamera" />
+                </label>
+                <label class="mb-2 flex items-center justify-between rounded-lg border border-white/10 bg-black/25 px-2.5 py-2">
+                  <span>Debug</span>
+                  <input type="checkbox" :checked="debugMode" @change="onToggleDebug" />
+                </label>
+                <label class="mb-2 flex items-center justify-between rounded-lg border border-white/10 bg-black/25 px-2.5 py-2">
+                  <span>Landmarks</span>
+                  <input type="checkbox" :checked="showLandmarks" @change="onToggleLandmarks" />
+                </label>
+                <label class="flex items-center justify-between rounded-lg border border-white/10 bg-black/25 px-2.5 py-2">
+                  <span>Mirror</span>
+                  <input type="checkbox" :checked="mirroredPreview" @change="onToggleMirror" />
+                </label>
+              </div>
+            </transition>
           </div>
         </div>
 
