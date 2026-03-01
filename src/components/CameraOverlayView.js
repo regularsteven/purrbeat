@@ -108,9 +108,6 @@ export const CameraOverlayView = {
           <div class="rounded-2xl border border-white/15 bg-slate-900/50 px-3 py-2 shadow-lg backdrop-blur-sm">
             <p class="text-[0.65rem] uppercase tracking-[0.16em] text-cyan-200/90">Bank</p>
             <p class="text-lg font-semibold text-white">{{ activeBankLabel }}</p>
-            <p class="text-xs text-slate-200">Focused: <span class="text-amber-200">{{ activeControlLabel }}</span></p>
-            <p class="text-xs text-slate-300">Value: {{ activeControlDisplay }}</p>
-            <p class="text-xs text-slate-300">Transport: <span :class="running ? 'text-emerald-200' : 'text-slate-300'">{{ running ? 'Running' : 'Stopped' }}</span></p>
           </div>
 
           <div class="relative">
