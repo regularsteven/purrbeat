@@ -8,3 +8,7 @@
 - Always run build before deploy.
 - If `DEPLOY_DIR` is missing or empty, do not run deploy.
 - provide instructions if any new npm commands are required
+
+## PR Link Rule
+
+- Always include the GitHub pull request link when summarizing or reporting work related to this repo.
