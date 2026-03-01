@@ -230,7 +230,7 @@ export const CameraOverlayView = {
           </article>
         </div>
 
-        <div class="pointer-events-auto rounded-2xl border border-white/10 bg-slate-950/70 p-2 shadow-xl backdrop-blur-sm">
+        <div v-if="activeBankKey === 'kick'" class="pointer-events-auto rounded-2xl border border-white/10 bg-slate-950/70 p-2 shadow-xl backdrop-blur-sm">
           <div class="mb-2 flex items-center justify-between gap-3">
             <div>
               <p class="text-[0.65rem] uppercase tracking-[0.16em] text-cyan-200/90">Percussion sequencer</p>
