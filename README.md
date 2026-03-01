@@ -51,6 +51,18 @@ To force model refresh:
 MEDIAPIPE_REFRESH=1 npm run prepare:mediapipe
 ```
 
+## Development workflow
+
+This project follows a branching workflow so every new feature or fix is built in isolation before it reaches production.
+
+1. **Branching convention** – Start from `dev`, create a feature branch with a short, descriptive name (you can use `dev/feature-name` or `feature/short-description`). Don’t work directly on `main`, `test`, or `dev` except for merging.
+2. **Development loop** – Make changes, run `npm run dev` or `npm run test` locally, then commit with a clear message. Push the feature branch to GitHub, open a PR targeting `dev`, and request review if needed.
+3. **Merging path** – Once the feature branch is approved and merged into `dev`, we’ll eventually merge `dev` into `test` (the staging branch). Right now `test.purrbeat.codysites.com` is planned but not yet wired up; keep the same flow so the staging deployment can be turned on smoothly later.
+4. **Production release** – When `test` is ready, create a PR from `test` to `main`. The live site `https://purrbeat.codysites.com` is automatically updated via GitHub Actions whenever `main` receives new commits.
+5. **Agent responsibilities** – Whenever you’re asked to ship work, create the feature branch yourself, pick a meaningful name, and repeat steps 2‑4. Mention the workflow in documentation updates so other agents/operators know how to follow the same path.
+
+Keeping this workflow documented here ensures future contributors have a predictable path from idea → dev → test → production.
+
 ## Structure
 
 - `index.html` - app shell with Vue + Tailwind CDNs
