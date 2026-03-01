@@ -152,7 +152,7 @@ const CONTROL_DEFS = [
     type: 'number',
     label: 'Snare level',
     min: 0,
-    max: 1,
+    max: 1.5,
     step: 0.01,
     baseGestureRate: 0.24,
     gestureAdjustable: true,
