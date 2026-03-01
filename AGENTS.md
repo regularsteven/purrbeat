@@ -21,3 +21,5 @@
 - Never merge or open a PR into `main` until Steve says “I want this live.” At that point, open a PR (typically `test` → `main`), share the URL, and let Steve do the final merge. After the merge, GitHub Actions will deploy to https://purrbeat.codysites.com/demo.
 - Mention the live PR link in every report and do not merge to `main` yourself even after opening the PR.
 - **Steve only approves the `test → main` PR.** He doesn’t approve merges from feature branches into `dev` or from `dev` into `test`; those are handled without explicit sign-off.
+- **Agent responsibility:** On this project I merge features into `dev`, then merge `dev` into `test` so you can `git checkout test && git pull`, and I share the final PR link when you say “I want this live.” You are the one who opens/merges `test → main`. 
+- **Workflow reminder:** I manage every feature→dev and dev→test merge; you only approve the `test → main` pull request once you confirm you want it live.
