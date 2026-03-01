@@ -20,3 +20,4 @@
 - Once `dev` holds all requested work that is ready for testing, merge `dev` into `test` yourself. This keeps `test` in sync with human-ready changes so Steve can `git checkout test` and pull without handling merges.
 - Never merge or open a PR into `main` until Steve says “I want this live.” At that point, open a PR (typically `test` → `main`), share the URL, and let Steve do the final merge. After the merge, GitHub Actions will deploy to https://purrbeat.codysites.com/demo.
 - Mention the live PR link in every report and do not merge to `main` yourself even after opening the PR.
+- **Steve only approves the `test → main` PR.** He doesn’t approve merges from feature branches into `dev` or from `dev` into `test`; those are handled without explicit sign-off.
