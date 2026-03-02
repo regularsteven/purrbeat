@@ -325,8 +325,114 @@
   background: var(--hud-panel);
   backdrop-filter: blur(var(--hud-panel-blur));
   -webkit-backdrop-filter: blur(var(--hud-panel-blur));
-  max-height: 28vh;
+  max-height: 38vh;
   overflow-y: auto;
+}
+
+.hud-perc-global-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--hud-border);
+  border-radius: 0.5rem;
+  background: rgba(0, 0, 0, 0.2);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.7rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.hud-perc-global-toggle:hover {
+  border-color: var(--hud-cyan-dim);
+  background: rgba(34, 211, 238, 0.08);
+}
+
+.hud-perc-chevron {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+  transition: transform 0.15s ease;
+}
+
+.hud-perc-chevron.sm {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+
+.hud-perc-chevron-open {
+  transform: rotate(180deg);
+}
+
+.hud-perc-global-panel {
+  margin-top: 0.5rem;
+  padding: 0.6rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.5rem;
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.hud-perc-global-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.75rem;
+}
+
+.hud-perc-control {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.hud-perc-control-label {
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.hud-perc-control-value {
+  font-size: 0.6rem;
+  color: var(--hud-cyan);
+}
+
+.hud-perc-tune-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.45rem;
+  border: 1px solid var(--hud-border);
+  border-radius: 0.35rem;
+  background: rgba(0, 0, 0, 0.25);
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 0.6rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.hud-perc-tune-btn:hover {
+  border-color: var(--hud-cyan-dim);
+  color: var(--hud-cyan);
+}
+
+.hud-perc-tune-open {
+  border-color: var(--hud-cyan-dim);
+  background: rgba(34, 211, 238, 0.1);
+  color: var(--hud-cyan);
+}
+
+.hud-perc-tuning-panel {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  padding: 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 0.4rem;
+  background: rgba(0, 0, 0, 0.2);
+  overflow: hidden;
 }
 
 .hud-perc-track {

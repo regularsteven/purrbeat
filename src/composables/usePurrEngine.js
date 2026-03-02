@@ -1,7 +1,11 @@
 import { clampCoreControlValue, isCoreControlKey } from '../config/coreControls.js';
+import { DRUM_PRESETS } from '../config/drumPresets.js';
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
-const SNARE_LEVEL_MAX = 1.5;
-const SNARE_LEVEL_DEFAULT = 0.65;
+
+const STORAGE_KEY = 'purrbeat-state';
+const SNARE_LEVEL_MIN = 1;
+const SNARE_LEVEL_MAX = 5;
+const SNARE_LEVEL_DEFAULT = 1.5;
 const dbToGain = (db) => Math.pow(10, db / 20);
 
 const DEFAULT = {
@@ -19,67 +23,135 @@ const DEFAULT = {
   kickOn: true,
   kickLevel: 0.55,
   kickDecayMs: 180,
+  kickToneHz: 120,
   snareOn: true,
   snareLevel: SNARE_LEVEL_DEFAULT,
   snareToneHz: 1900,
   snareDecayMs: 120,
+  hihatOn: false,
+  hihatClosedLevel: 1.2,
+  hihatClosedDecayMs: 35,
+  hihatOpenLevel: 1.0,
+  hihatOpenDecayMs: 100,
+  hihatToneHz: 10000,
   swing: 0.12,
   loopBars: 2,
   segmentsPerBar: 16,
   kickPattern: Array.from({ length: 256 }, (_, i) => (i % 32 === 0 ? 1 : 0)),
   snarePattern: Array.from({ length: 256 }, (_, i) => (i % 32 === 16 ? 1 : 0)),
+  hihatClosedPattern: Array.from({ length: 256 }, (_, i) => (i % 2 === 0 ? 1 : 0)),
+  hihatOpenPattern: Array.from({ length: 256 }, (_, i) => (i % 16 === 0 || i % 16 === 8 ? 1 : 0)),
 };
 
 const PROFILES = {
   soft: {
     bpm: 78, syncToBpm: true, pulseDiv: 1,
     baseHz: 24, binauralHz: 1.8, pulseDepth: 0.45, noiseAmt: 0.18, lowpassHz: 320, drive: 0.12, outDb: -20,
-    kickOn: true, kickLevel: 0.45, kickDecayMs: 170,
-    snareOn: true, snareLevel: 0.45, snareToneHz: 1700, snareDecayMs: 140,
+    kickOn: true, kickLevel: 0.45, kickDecayMs: 170, kickToneHz: 110,
+    snareOn: true, snareLevel: 1.5, snareToneHz: 1700, snareDecayMs: 140,
+    hihatOn: false, hihatClosedLevel: 1.2, hihatClosedDecayMs: 30, hihatOpenLevel: 1, hihatOpenDecayMs: 90, hihatToneHz: 9500,
     swing: 0.10, loopBars: 2, segmentsPerBar: 16,
     kickPattern: Array.from({ length: 256 }, (_, i) => (i % 32 === 0 ? 1 : 0)),
     snarePattern: Array.from({ length: 256 }, (_, i) => (i % 32 === 16 ? 1 : 0)),
+    hihatClosedPattern: Array.from({ length: 256 }, () => 0),
+    hihatOpenPattern: Array.from({ length: 256 }, () => 0),
   },
   sleepy: {
     bpm: 64, syncToBpm: true, pulseDiv: 0.5,
     baseHz: 20, binauralHz: 0.9, pulseDepth: 0.35, noiseAmt: 0.15, lowpassHz: 260, drive: 0.10, outDb: -22,
-    kickOn: false, kickLevel: 0, kickDecayMs: 200,
-    snareOn: false, snareLevel: 0, snareToneHz: 1400, snareDecayMs: 160,
+    kickOn: false, kickLevel: 0, kickDecayMs: 200, kickToneHz: 100,
+    snareOn: false, snareLevel: 1, snareToneHz: 1400, snareDecayMs: 160,
+    hihatOn: false, hihatClosedLevel: 1.2, hihatClosedDecayMs: 35, hihatOpenLevel: 1, hihatOpenDecayMs: 100, hihatToneHz: 10000,
     swing: 0, loopBars: 2, segmentsPerBar: 16,
     kickPattern: Array.from({ length: 256 }, () => 0),
     snarePattern: Array.from({ length: 256 }, () => 0),
+    hihatClosedPattern: Array.from({ length: 256 }, () => 0),
+    hihatOpenPattern: Array.from({ length: 256 }, () => 0),
   },
   motor: {
     bpm: 112, syncToBpm: true, pulseDiv: 2,
     baseHz: 48, binauralHz: 4.2, pulseDepth: 0.75, noiseAmt: 0.10, lowpassHz: 520, drive: 0.22, outDb: -20,
-    kickOn: true, kickLevel: 0.70, kickDecayMs: 140,
-    snareOn: true, snareLevel: 0.7, snareToneHz: 2200, snareDecayMs: 100,
+    kickOn: true, kickLevel: 0.70, kickDecayMs: 140, kickToneHz: 130,
+    snareOn: true, snareLevel: 2, snareToneHz: 2200, snareDecayMs: 100,
+    hihatOn: true, hihatClosedLevel: 1.2, hihatClosedDecayMs: 28, hihatOpenLevel: 1, hihatOpenDecayMs: 80, hihatToneHz: 11000,
     swing: 0.06, loopBars: 2, segmentsPerBar: 16,
     kickPattern: Array.from({ length: 256 }, (_, i) => (i % 16 === 0 ? 1 : 0)),
     snarePattern: Array.from({ length: 256 }, (_, i) => (i % 16 === 8 ? 1 : 0)),
+    hihatClosedPattern: Array.from({ length: 256 }, (_, i) => (i % 2 === 0 ? 1 : 0)),
+    hihatOpenPattern: Array.from({ length: 256 }, (_, i) => (i % 16 === 0 || i % 16 === 8 ? 1 : 0)),
   },
   therapy: {
     bpm: 96, syncToBpm: true, pulseDiv: 1,
     baseHz: 30, binauralHz: 3.8, pulseDepth: 0.55, noiseAmt: 0.20, lowpassHz: 420, drive: 0.16, outDb: -19,
-    kickOn: true, kickLevel: 0.55, kickDecayMs: 180,
-    snareOn: true, snareLevel: 0.65, snareToneHz: 1850, snareDecayMs: 120,
+    kickOn: true, kickLevel: 0.55, kickDecayMs: 180, kickToneHz: 115,
+    snareOn: true, snareLevel: 1.8, snareToneHz: 1850, snareDecayMs: 120,
+    hihatOn: false, hihatClosedLevel: 1.2, hihatClosedDecayMs: 35, hihatOpenLevel: 1, hihatOpenDecayMs: 100, hihatToneHz: 10000,
     swing: 0.14, loopBars: 2, segmentsPerBar: 16,
     kickPattern: Array.from({ length: 256 }, (_, i) => (i % 32 === 0 || i % 32 === 24 ? 1 : 0)),
     snarePattern: Array.from({ length: 256 }, (_, i) => (i % 32 === 16 ? 1 : 0)),
+    hihatClosedPattern: Array.from({ length: 256 }, () => 0),
+    hihatOpenPattern: Array.from({ length: 256 }, () => 0),
   },
 };
 
 const MAX_STEPS = 256;
 
+function loadFromStorage() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const obj = JSON.parse(raw);
+    if (!obj || typeof obj !== 'object') return null;
+    const merged = { ...DEFAULT, ...obj };
+    merged.kickPattern = Array.from({ length: MAX_STEPS }, (_, i) => (obj.kickPattern?.[i] ? 1 : 0));
+    merged.snarePattern = Array.from({ length: MAX_STEPS }, (_, i) => (obj.snarePattern?.[i] ? 1 : 0));
+    const oldHh = obj.hihatPattern;
+    merged.hihatClosedPattern = obj.hihatClosedPattern
+      ? Array.from({ length: MAX_STEPS }, (_, i) => (obj.hihatClosedPattern[i] ? 1 : 0))
+      : oldHh ? Array.from({ length: MAX_STEPS }, (_, i) => (oldHh[i] ? 1 : 0)) : [...DEFAULT.hihatClosedPattern];
+    merged.hihatOpenPattern = obj.hihatOpenPattern
+      ? Array.from({ length: MAX_STEPS }, (_, i) => (obj.hihatOpenPattern[i] ? 1 : 0))
+      : oldHh ? Array.from({ length: MAX_STEPS }, (_, i) => (i % 16 === 0 || i % 16 === 8 ? 1 : 0)) : [...DEFAULT.hihatOpenPattern];
+    if (!merged.hihatClosedLevel && obj.hihatLevel != null) merged.hihatClosedLevel = obj.hihatLevel;
+    if (!merged.hihatOpenLevel && obj.hihatLevel != null) merged.hihatOpenLevel = obj.hihatLevel * 0.8;
+    if (!merged.hihatClosedDecayMs && obj.hihatDecayMs != null) merged.hihatClosedDecayMs = Math.min(obj.hihatDecayMs, 60);
+    if (!merged.hihatOpenDecayMs && obj.hihatDecayMs != null) merged.hihatOpenDecayMs = obj.hihatDecayMs;
+    delete merged.hihatPattern;
+    delete merged.hihatType;
+    delete merged.hihatLevel;
+    delete merged.hihatDecayMs;
+    return merged;
+  } catch {
+    return null;
+  }
+}
+
+function saveToStorage(params) {
+  try {
+    const toSave = { ...params };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
+  } catch {
+    // ignore
+  }
+}
+
 const PERCUSSION_TRACKS = Object.freeze([
   Object.freeze({ key: 'kick', label: 'Kick', enabledParam: 'kickOn', patternParam: 'kickPattern' }),
   Object.freeze({ key: 'snare', label: 'Snare', enabledParam: 'snareOn', patternParam: 'snarePattern' }),
+  Object.freeze({ key: 'hihatClosed', label: 'HH Closed', enabledParam: 'hihatOn', patternParam: 'hihatClosedPattern' }),
+  Object.freeze({ key: 'hihatOpen', label: 'HH Open', enabledParam: 'hihatOn', patternParam: 'hihatOpenPattern' }),
 ]);
 
 export function usePurrEngine() {
   const scopeCanvas = Vue.ref(null);
   const running = Vue.ref(false);
-  const params = Vue.reactive({ ...DEFAULT, kickPattern: [...DEFAULT.kickPattern], snarePattern: [...DEFAULT.snarePattern] });
+  const params = Vue.reactive(loadFromStorage() || {
+    ...DEFAULT,
+    kickPattern: [...DEFAULT.kickPattern],
+    snarePattern: [...DEFAULT.snarePattern],
+    hihatClosedPattern: [...DEFAULT.hihatClosedPattern],
+    hihatOpenPattern: [...DEFAULT.hihatOpenPattern],
+  });
   const stepIndex = Vue.ref(0);
 
   let ctx = null;
@@ -175,6 +247,8 @@ export function usePurrEngine() {
   function triggerKick(time) {
     if (!ctx || !drumBus || !params.kickOn) return;
     const decay = clamp(params.kickDecayMs, 40, 600) / 1000;
+    const startHz = clamp(params.kickToneHz ?? 120, 60, 220);
+    const endHz = Math.max(35, startHz * 0.4);
 
     const osc = ctx.createOscillator();
     const g = ctx.createGain();
@@ -182,8 +256,8 @@ export function usePurrEngine() {
     const lp = ctx.createBiquadFilter();
 
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(140, time);
-    osc.frequency.exponentialRampToValueAtTime(50, time + decay);
+    osc.frequency.setValueAtTime(startHz, time);
+    osc.frequency.exponentialRampToValueAtTime(endHz, time + decay);
 
     g.gain.setValueAtTime(0.0001, time);
     g.gain.exponentialRampToValueAtTime(Math.max(0.0001, clamp(params.kickLevel, 0, 1)), time + 0.005);
@@ -204,6 +278,52 @@ export function usePurrEngine() {
     osc.stop(time + decay + 0.05);
   }
 
+  function triggerHihatClosed(time) {
+    if (!ctx || !drumBus || !params.hihatOn) return;
+    const decay = clamp(params.hihatClosedDecayMs ?? 35, 10, 80) / 1000;
+    const level = clamp(params.hihatClosedLevel ?? 1.2, 0.5, 3);
+
+    const noise = ctx.createBufferSource();
+    noise.buffer = createNoiseBuffer(ctx, 0.2);
+    const hp = ctx.createBiquadFilter();
+    hp.type = 'highpass';
+    hp.frequency.setValueAtTime(clamp(params.hihatToneHz ?? 10000, 4000, 16000), time);
+    hp.Q.setValueAtTime(0.5, time);
+    const hpGain = ctx.createGain();
+    hpGain.gain.setValueAtTime(0.0001, time);
+    hpGain.gain.exponentialRampToValueAtTime(Math.max(0.0001, level), time + 0.001);
+    hpGain.gain.exponentialRampToValueAtTime(0.0001, time + decay);
+
+    noise.connect(hp);
+    hp.connect(hpGain);
+    hpGain.connect(drumBus);
+    noise.start(time);
+    noise.stop(time + decay + 0.02);
+  }
+
+  function triggerHihatOpen(time) {
+    if (!ctx || !drumBus || !params.hihatOn) return;
+    const decay = clamp(params.hihatOpenDecayMs ?? 100, 40, 200) / 1000;
+    const level = clamp(params.hihatOpenLevel ?? 1, 0.5, 3);
+
+    const noise = ctx.createBufferSource();
+    noise.buffer = createNoiseBuffer(ctx, 0.4);
+    const hp = ctx.createBiquadFilter();
+    hp.type = 'highpass';
+    hp.frequency.setValueAtTime(clamp(params.hihatToneHz ?? 10000, 4000, 16000), time);
+    hp.Q.setValueAtTime(0.4, time);
+    const hpGain = ctx.createGain();
+    hpGain.gain.setValueAtTime(0.0001, time);
+    hpGain.gain.exponentialRampToValueAtTime(Math.max(0.0001, level), time + 0.002);
+    hpGain.gain.exponentialRampToValueAtTime(0.0001, time + decay);
+
+    noise.connect(hp);
+    hp.connect(hpGain);
+    hpGain.connect(drumBus);
+    noise.start(time);
+    noise.stop(time + decay + 0.03);
+  }
+
   function scheduleStep(idx, time) {
     if (params.kickPattern[idx]) {
       const swingDelay = idx % 2 === 1 ? sixteenthDur() * clamp(params.swing, 0, 0.6) * 0.5 : 0;
@@ -211,6 +331,14 @@ export function usePurrEngine() {
     }
     if (params.snarePattern[idx]) {
       triggerSnare(time);
+    }
+    if (params.hihatClosedPattern[idx]) {
+      const swingDelay = idx % 2 === 1 ? sixteenthDur() * clamp(params.swing, 0, 0.6) * 0.5 : 0;
+      triggerHihatClosed(time + swingDelay);
+    }
+    if (params.hihatOpenPattern[idx]) {
+      const swingDelay = idx % 2 === 1 ? sixteenthDur() * clamp(params.swing, 0, 0.6) * 0.5 : 0;
+      triggerHihatOpen(time + swingDelay);
     }
   }
 
@@ -227,7 +355,7 @@ export function usePurrEngine() {
     const noiseGainNode = ctx.createGain();
 
     noiseGainNode.gain.setValueAtTime(0.0001, time);
-    const snareLevel = clamp(params.snareLevel, 0, SNARE_LEVEL_MAX);
+    const snareLevel = clamp(params.snareLevel, SNARE_LEVEL_MIN, SNARE_LEVEL_MAX);
     noiseGainNode.gain.exponentialRampToValueAtTime(Math.max(0.0001, snareLevel), time + 0.002);
     noiseGainNode.gain.exponentialRampToValueAtTime(0.0001, time + decay);
 
@@ -340,7 +468,12 @@ export function usePurrEngine() {
   function applyProfile(name) {
     const profile = PROFILES[name];
     if (!profile) return;
-    Object.assign(params, profile, { kickPattern: [...profile.kickPattern], snarePattern: [...profile.snarePattern] });
+    Object.assign(params, profile, {
+      kickPattern: [...(profile.kickPattern || DEFAULT.kickPattern)],
+      snarePattern: [...(profile.snarePattern || DEFAULT.snarePattern)],
+      hihatClosedPattern: [...(profile.hihatClosedPattern || DEFAULT.hihatClosedPattern)],
+      hihatOpenPattern: [...(profile.hihatOpenPattern || DEFAULT.hihatOpenPattern)],
+    });
     applyParams();
   }
 
@@ -360,14 +493,23 @@ export function usePurrEngine() {
     params.snareOn = Math.random() > 0.25;
     params.kickLevel = r(0.3, 0.8);
     params.kickDecayMs = Math.round(r(90, 260));
-    params.snareLevel = r(0.3, Math.min(SNARE_LEVEL_MAX, 1.2));
+    params.kickToneHz = Math.round(r(80, 180));
+    params.snareLevel = r(SNARE_LEVEL_MIN, SNARE_LEVEL_MAX);
     params.snareToneHz = Math.round(r(1000, 3200));
     params.snareDecayMs = Math.round(r(70, 220));
+    params.hihatOn = Math.random() > 0.2;
+    params.hihatClosedLevel = r(0.8, 1.5);
+    params.hihatClosedDecayMs = Math.round(r(20, 50));
+    params.hihatOpenLevel = r(0.3, 1);
+    params.hihatOpenDecayMs = Math.round(r(60, 140));
+    params.hihatToneHz = Math.round(r(6000, 14000));
     params.swing = r(0, 0.2);
     params.loopBars = [1, 2, 4][Math.floor(Math.random() * 3)];
     params.segmentsPerBar = [8, 16, 32][Math.floor(Math.random() * 3)];
     params.kickPattern = Array.from({ length: MAX_STEPS }, (_, i) => (i % 16 === 0 ? 1 : (Math.random() < 0.08 ? 1 : 0)));
     params.snarePattern = Array.from({ length: MAX_STEPS }, (_, i) => (i % 16 === 8 ? 1 : (Math.random() < 0.04 ? 1 : 0)));
+    params.hihatClosedPattern = Array.from({ length: MAX_STEPS }, (_, i) => (i % 2 === 0 ? (Math.random() < 0.2 ? 1 : 0) : 0));
+    params.hihatOpenPattern = Array.from({ length: MAX_STEPS }, (_, i) => (i % 16 === 0 || i % 16 === 8 ? (Math.random() < 0.3 ? 1 : 0) : 0));
     applyParams();
   }
 
@@ -397,16 +539,45 @@ export function usePurrEngine() {
     if (!track) return;
     params[track.patternParam] = Array.from({ length: MAX_STEPS }, (_, i) => {
       if (mode === 'clear') return 0;
-      if (mode === 'simple') return trackKey === 'snare' ? (i % 16 === 8 ? 1 : 0) : (i === 0 ? 1 : 0);
-      if (mode === 'four') return trackKey === 'snare' ? (i % 16 === 8 ? 1 : 0) : (i % 16 === 0 ? 1 : 0);
-      if (mode === 'backbeat') return trackKey === 'snare' ? (i % 16 === 4 || i % 16 === 12 ? 1 : 0) : (i % 16 === 0 ? 1 : 0);
-      const chance = trackKey === 'snare' ? 0.09 : 0.12;
-      return i % 16 === (trackKey === 'snare' ? 8 : 0) || Math.random() < chance ? 1 : 0;
+      if (mode === 'simple') {
+        if (trackKey === 'snare') return i % 16 === 8 ? 1 : 0;
+        if (trackKey === 'hihatClosed') return i % 2 === 0 ? 1 : 0;
+        if (trackKey === 'hihatOpen') return i % 16 === 0 || i % 16 === 8 ? 1 : 0;
+        return i === 0 ? 1 : 0;
+      }
+      if (mode === 'four') {
+        if (trackKey === 'snare') return i % 16 === 8 ? 1 : 0;
+        if (trackKey === 'hihatClosed') return i % 2 === 0 ? 1 : 0;
+        if (trackKey === 'hihatOpen') return i % 16 === 0 || i % 16 === 8 ? 1 : 0;
+        return i % 16 === 0 ? 1 : 0;
+      }
+      if (mode === 'backbeat') {
+        if (trackKey === 'snare') return i % 16 === 4 || i % 16 === 12 ? 1 : 0;
+        if (trackKey === 'hihatClosed') return i % 2 === 0 ? 1 : 0;
+        if (trackKey === 'hihatOpen') return i % 16 === 0 || i % 16 === 8 ? 1 : 0;
+        return i % 16 === 0 ? 1 : 0;
+      }
+      return 0;
     });
   }
 
+  function applyDrumPreset(presetKey) {
+    const preset = DRUM_PRESETS[presetKey];
+    if (!preset) return;
+    params.kickPattern = [...(preset.kickPattern || DEFAULT.kickPattern)];
+    params.snarePattern = [...(preset.snarePattern || DEFAULT.snarePattern)];
+    params.hihatClosedPattern = [...(preset.hihatClosedPattern || DEFAULT.hihatClosedPattern)];
+    params.hihatOpenPattern = [...(preset.hihatOpenPattern || DEFAULT.hihatOpenPattern)];
+  }
+
   function reset() {
-    Object.assign(params, { ...DEFAULT, kickPattern: [...DEFAULT.kickPattern], snarePattern: [...DEFAULT.snarePattern] });
+    Object.assign(params, {
+      ...DEFAULT,
+      kickPattern: [...DEFAULT.kickPattern],
+      snarePattern: [...DEFAULT.snarePattern],
+      hihatClosedPattern: [...DEFAULT.hihatClosedPattern],
+      hihatOpenPattern: [...DEFAULT.hihatOpenPattern],
+    });
     applyParams();
   }
 
@@ -421,8 +592,20 @@ export function usePurrEngine() {
     params.segmentsPerBar = [8, 16, 32].includes(Number(obj.segmentsPerBar)) ? Number(obj.segmentsPerBar) : params.segmentsPerBar;
     params.kickPattern = Array.from({ length: MAX_STEPS }, (_, i) => (obj.kickPattern?.[i] ? 1 : 0));
     params.snarePattern = Array.from({ length: MAX_STEPS }, (_, i) => (obj.snarePattern?.[i] ? 1 : 0));
+    params.hihatClosedPattern = Array.from({ length: MAX_STEPS }, (_, i) => (obj.hihatClosedPattern?.[i] ? 1 : 0));
+    params.hihatOpenPattern = Array.from({ length: MAX_STEPS }, (_, i) => (obj.hihatOpenPattern?.[i] ? 1 : 0));
     applyParams();
   }
+
+  let saveTimeout = null;
+  Vue.watch(
+    params,
+    () => {
+      if (saveTimeout) clearTimeout(saveTimeout);
+      saveTimeout = setTimeout(() => saveToStorage(params), 400);
+    },
+    { deep: true },
+  );
 
   return {
     params,
@@ -449,6 +632,7 @@ export function usePurrEngine() {
     toggleTrackEnabled,
     toggleTrackStep,
     setTrackPattern,
+    applyDrumPreset,
     reset,
     copyConfig,
     applyConfig,

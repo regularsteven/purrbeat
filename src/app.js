@@ -380,11 +380,19 @@ export const App = {
       isFocused,
       isControlDisabled,
       formatDisplay,
+      getControl: (key) => controlByKey.get(key),
       percussionTracks: engine.percussionTracks,
       totalSteps: engine.totalSteps,
       onToggleTrackEnabled,
       onToggleTrackStep,
       onSetTrackPattern,
+      onApplyDrumPreset: engine.applyDrumPreset,
+      onClearAllPatterns: () => {
+        engine.setTrackPattern('kick', 'clear');
+        engine.setTrackPattern('snare', 'clear');
+        engine.setTrackPattern('hihatClosed', 'clear');
+        engine.setTrackPattern('hihatOpen', 'clear');
+      },
       appVersion: APP_VERSION,
     };
   },
@@ -444,6 +452,9 @@ export const App = {
     :on-toggle-track-enabled="onToggleTrackEnabled"
     :on-toggle-track-step="onToggleTrackStep"
     :on-set-track-pattern="onSetTrackPattern"
+    :on-apply-drum-preset="onApplyDrumPreset"
+    :on-clear-all-patterns="onClearAllPatterns"
+    :get-control="getControl"
     :app-version="appVersion"
   />`,
 };
