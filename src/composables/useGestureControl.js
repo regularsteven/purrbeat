@@ -35,6 +35,7 @@ export function useGestureControl(options = {}) {
   const activeGesture = Vue.ref('idle');
   const gestureConfidence = Vue.ref(0);
   const adjustVelocity = Vue.ref(0);
+  const handCount = Vue.ref(0);
   const lastAction = Vue.ref('');
   const lastActionAt = Vue.ref('');
   const gestureDebug = Vue.reactive({
@@ -68,6 +69,12 @@ export function useGestureControl(options = {}) {
     onSwipeRight: () => {
       options.onSwipeRight?.();
     },
+    onControlSwipeLeft: () => {
+      options.onControlSwipeLeft?.();
+    },
+    onControlSwipeRight: () => {
+      options.onControlSwipeRight?.();
+    },
     onAdjust: (key, delta) => {
       options.onAdjustControl?.(key, delta);
     },
@@ -99,6 +106,7 @@ export function useGestureControl(options = {}) {
     activeGesture.value = 'idle';
     gestureConfidence.value = 0;
     adjustVelocity.value = 0;
+    handCount.value = 0;
     gestureDebug.deltaXRaw = 0;
     gestureDebug.deltaXAdjusted = 0;
     gestureDebug.interpretedSwipe = 'none';
@@ -176,6 +184,7 @@ export function useGestureControl(options = {}) {
     try {
       const result = runtime.detectForVideo(cameraVideoRef.value, timestampMs);
       const hands = normalizeHands(result, timestampMs);
+      handCount.value = hands.length;
       const outcome = stateMachine.update({
         timestampMs,
         hands,
@@ -347,5 +356,6 @@ export function useGestureControl(options = {}) {
     stopGestureLoop,
     setFocusedControl,
     getAssetInfo,
+    handCount,
   };
 }

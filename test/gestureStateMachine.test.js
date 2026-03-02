@@ -18,7 +18,7 @@ test('focus swipe uses cooldown', () => {
     timestampMs: 1000,
     hands: [hand({ pose: 'open_palm', vx: 1.2 })],
   });
-  assert.equal(first.events[0]?.type, 'swipe_right');
+  assert.equal(first.events[0]?.type, 'control_swipe_right');
 
   const blockedByCooldown = machine.update({
     timestampMs: 1200,
@@ -30,7 +30,7 @@ test('focus swipe uses cooldown', () => {
     timestampMs: 1500,
     hands: [hand({ pose: 'open_palm', vx: -1.1 })],
   });
-  assert.equal(afterCooldown.events[0]?.type, 'swipe_left');
+  assert.equal(afterCooldown.events[0]?.type, 'control_swipe_left');
 });
 
 test('mirrored preview inverts horizontal swipe interpretation', () => {
@@ -41,7 +41,7 @@ test('mirrored preview inverts horizontal swipe interpretation', () => {
     hands: [hand({ pose: 'open_palm', vx: 1.2 })],
     mirrorX: false,
   });
-  assert.equal(unmirrored.events[0]?.type, 'swipe_right');
+  assert.equal(unmirrored.events[0]?.type, 'control_swipe_right');
 
   machine.reset();
   const mirrored = machine.update({
@@ -49,9 +49,9 @@ test('mirrored preview inverts horizontal swipe interpretation', () => {
     hands: [hand({ pose: 'open_palm', vx: 1.2 })],
     mirrorX: true,
   });
-  assert.equal(mirrored.events[0]?.type, 'swipe_left');
+  assert.equal(mirrored.events[0]?.type, 'control_swipe_left');
   assert.equal(mirrored.debug.mirrored, true);
-  assert.equal(mirrored.debug.interpretedSwipe, 'left');
+  assert.equal(mirrored.debug.interpretedSwipe, 'control_left');
 });
 
 test('index hold emits continuous adjust events after debounce', () => {
@@ -70,6 +70,21 @@ test('index hold emits continuous adjust events after debounce', () => {
   assert.equal(afterHold.events[0]?.type, 'adjust_value');
   assert.equal(afterHold.events[0]?.sign, 1);
   assert.ok(afterHold.events[0].directionalMotion > 0);
+});
+
+test('two-hand open palms with horizontal velocity emit bank_swipe', () => {
+  const machine = createGestureStateMachine();
+
+  const result = machine.update({
+    timestampMs: 1000,
+    hands: [
+      hand({ pose: 'open_palm', vx: 1.2 }),
+      hand({ pose: 'open_palm', vx: 1.0 }),
+    ],
+    mirrorX: false,
+  });
+  assert.equal(result.events[0]?.type, 'bank_swipe_right');
+  assert.equal(result.debug.interpretedSwipe, 'bank_right');
 });
 
 test('two-hand open to fist transition triggers transport stop', () => {

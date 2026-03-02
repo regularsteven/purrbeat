@@ -11,6 +11,7 @@ export function createGestureStateMachine(config = {}) {
   const state = {
     lastTs: null,
     swipeCooldownUntil: 0,
+    bankSwipeCooldownUntil: 0,
     transportCooldownUntil: 0,
     adjustPose: null,
     adjustPoseSince: 0,
@@ -23,6 +24,7 @@ export function createGestureStateMachine(config = {}) {
   function reset() {
     state.lastTs = null;
     state.swipeCooldownUntil = 0;
+    state.bankSwipeCooldownUntil = 0;
     state.transportCooldownUntil = 0;
     state.adjustPose = null;
     state.adjustPoseSince = 0;
@@ -98,6 +100,23 @@ export function createGestureStateMachine(config = {}) {
 
       state.adjustPose = null;
       confidence = Math.min(...hands.map((hand) => hand.confidence));
+
+      if (twoHandsPose === 'open' && ts >= state.bankSwipeCooldownUntil) {
+        const avgVelX = hands.reduce((s, h) => s + (h.velocity?.x || 0), 0) / hands.length;
+        const adjustedVelX = mirrorX ? -avgVelX : avgVelX;
+        if (Math.abs(adjustedVelX) >= thresholds.swipeVelocityX) {
+          const direction = adjustedVelX > 0 ? 'right' : 'left';
+          events.push({
+            type: direction === 'right' ? 'bank_swipe_right' : 'bank_swipe_left',
+            velocityX: adjustedVelX,
+            mirrored: mirrorX,
+          });
+          state.bankSwipeCooldownUntil = ts + thresholds.swipeCooldownMs;
+          activeGesture = direction === 'right' ? 'bank_swipe_right' : 'bank_swipe_left';
+          debug.interpretedSwipe = `bank_${direction}`;
+        }
+      }
+
       if (!events.length) activeGesture = twoHandsPose === 'open' ? 'two_open' : 'two_fist';
       return { events, activeGesture, confidence, dtSec, debug };
     }
@@ -126,15 +145,15 @@ export function createGestureStateMachine(config = {}) {
     ) {
       const direction = adjustedVelocityX > 0 ? 'right' : 'left';
       events.push({
-        type: direction === 'right' ? 'swipe_right' : 'swipe_left',
+        type: direction === 'right' ? 'control_swipe_right' : 'control_swipe_left',
         velocityX: adjustedVelocityX,
         rawVelocityX,
         mirrored: mirrorX,
       });
       state.swipeCooldownUntil = ts + thresholds.swipeCooldownMs;
-      activeGesture = direction === 'right' ? 'swipe_right' : 'swipe_left';
+      activeGesture = direction === 'right' ? 'control_swipe_right' : 'control_swipe_left';
       confidence = hand.confidence;
-      debug.interpretedSwipe = direction;
+      debug.interpretedSwipe = `control_${direction}`;
     }
 
     const isAdjustPose = hand.pose === 'index_up' || hand.pose === 'index_down';
