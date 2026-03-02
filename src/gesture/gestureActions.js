@@ -6,6 +6,8 @@ export function createGestureActions({
   isControlAdjustable,
   onSwipeRight,
   onSwipeLeft,
+  onControlSwipeRight,
+  onControlSwipeLeft,
   onFocusNext,
   onFocusPrev,
   onAdjust,
@@ -19,17 +21,29 @@ export function createGestureActions({
       let latestAction = null;
 
       for (const event of events) {
-        if (event.type === 'swipe_right' || event.type === 'focus_next') {
+        if (event.type === 'bank_swipe_right' || event.type === 'swipe_right' || event.type === 'focus_next') {
           onSwipeRight?.();
           onFocusNext?.();
           latestAction = 'swipe_right';
           continue;
         }
 
-        if (event.type === 'swipe_left' || event.type === 'focus_prev') {
+        if (event.type === 'bank_swipe_left' || event.type === 'swipe_left' || event.type === 'focus_prev') {
           onSwipeLeft?.();
           onFocusPrev?.();
           latestAction = 'swipe_left';
+          continue;
+        }
+
+        if (event.type === 'control_swipe_right') {
+          onControlSwipeRight?.();
+          latestAction = 'control_swipe_right';
+          continue;
+        }
+
+        if (event.type === 'control_swipe_left') {
+          onControlSwipeLeft?.();
+          latestAction = 'control_swipe_left';
           continue;
         }
 
