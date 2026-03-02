@@ -27,6 +27,10 @@ With `DEPLOY_DIR` set to your web root `demo` folder, the app URL is:
 
 - [https://purrbeat.test/demo/index.html](https://purrbeat.test/demo/index.html)
 
+## Design briefs
+
+- `docs/perbeat-camera-hud-ui-mockup-brief.md` - high-fidelity camera-first HUD UI mockup requirements for Perbeat/Per (banks + carousel + gesture-mode amendment).
+
 ## Gesture controls (v1)
 
 - One open palm swipe left/right: carousel focus through core controls
