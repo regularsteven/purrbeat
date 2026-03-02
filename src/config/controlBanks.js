@@ -186,19 +186,19 @@ const CONTROL_DEFS = [
 
 export const CONTROL_BANKS = Object.freeze([
   Object.freeze({
-    key: 'transport',
-    label: 'Transport',
-    controls: Object.freeze(['bpm', 'syncToBpm', 'pulseDiv']),
-  }),
-  Object.freeze({
     key: 'purr',
-    label: 'Purr',
+    label: 'Per',
     controls: Object.freeze(['baseHz', 'binauralHz', 'pulseDepth', 'pulseHz', 'noiseAmt', 'lowpassHz', 'drive', 'outDb']),
   }),
   Object.freeze({
     key: 'kick',
-    label: 'Perc',
+    label: 'Percussion',
     controls: Object.freeze(['kickOn', 'kickLevel', 'kickDecayMs', 'snareOn', 'snareLevel', 'snareToneHz', 'snareDecayMs', 'swing', 'loopBars', 'segmentsPerBar']),
+  }),
+  Object.freeze({
+    key: 'transport',
+    label: 'General',
+    controls: Object.freeze(['bpm', 'syncToBpm', 'pulseDiv']),
   }),
 ]);
 

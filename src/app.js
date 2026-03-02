@@ -280,6 +280,8 @@ export const App = {
       },
       onSwipeLeft: () => setActiveBank(overlayStore.activeBankIndex - 1),
       onSwipeRight: () => setActiveBank(overlayStore.activeBankIndex + 1),
+      onControlSwipeLeft: () => setActiveControlIndex(overlayStore.activeControlIndex - 1),
+      onControlSwipeRight: () => setActiveControlIndex(overlayStore.activeControlIndex + 1),
       onAdjustControl: (key, delta) => nudgeControlValue(key, delta),
       onTransportStart: () => {
         if (!isTransportGestureAllowed()) return;
@@ -420,6 +422,7 @@ export const App = {
     :last-action="lastAction"
     :last-action-at="lastActionAt"
     :gesture-debug="overlayStore.gestureState"
+    :hand-count="handCount"
 
     :on-toggle-camera="toggleCameraControl"
     :on-toggle-debug="toggleDebugMode"
